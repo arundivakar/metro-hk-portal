@@ -17,6 +17,11 @@ export const useStationStore = create((set, get) => ({
   selectedStation: loadPersistedStation(),
   assignedStations: [],
   isLoadingStations: false,
+  alsGroupFilter: 'ALL STATIONS',
+
+  setAlsGroupFilter: (groupName) => {
+    set({ alsGroupFilter: groupName });
+  },
 
   // Set selected station and persist to sessionStorage
   setStation: (station) => {

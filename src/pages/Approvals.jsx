@@ -10,12 +10,12 @@ import { RequestStatusBadge, PriorityBadge } from '../components/ui/Badge';
 import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { supabase } from '../lib/supabase';
-import { ROLES, REQUEST_STATUS, APPROVAL_THRESHOLD } from '../lib/constants';
+import { ROLES, REQUEST_STATUS, APPROVAL_THRESHOLD, ALS_GROUPS } from '../lib/constants';
 import toast from 'react-hot-toast';
 
 export default function Approvals() {
   const { role, profile } = useAuthStore();
-  const { selectedStation } = useStationStore();
+  const { selectedStation, alsGroupFilter } = useStationStore();
 
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,7 +25,7 @@ export default function Approvals() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => { loadRequests(); }, [selectedStation?.id, role]); // eslint-disable-line
+  useEffect(() => { loadRequests(); }, [selectedStation?.id, role, alsGroupFilter]); // eslint-disable-line
 
   const loadRequests = async () => {
     setIsLoading(true);
@@ -47,11 +47,30 @@ export default function Approvals() {
       } else if (role === ROLES.ALS) {
         // ALS sees forwarded requests
         query = query.in('status', [REQUEST_STATUS.FORWARDED_ALS]);
+        
+        // Apply ALS Group Filter
+        const allowedStations = ALS_GROUPS[alsGroupFilter];
+        if (allowedStations) {
+          // We need to filter by station IDs matching the allowed codes
+          // Since we join on stations, we can filter on the joined table in Supabase
+          // or fetch stations first. Let's do client-side filtering for simplicity since
+          // the list of requests isn't huge, or fetch station IDs.
+          // Since `stations (code, name)` is joined, we can just filter `data` after fetch.
+        }
       }
 
       const { data, error: err } = await query;
       if (err) throw err;
-      setRequests(data ?? []);
+      
+      let filteredData = data ?? [];
+      if (role === ROLES.ALS) {
+        const allowedStations = ALS_GROUPS[alsGroupFilter];
+        if (allowedStations) {
+          filteredData = filteredData.filter(r => r.stations && allowedStations.includes(r.stations.code));
+        }
+      }
+      
+      setRequests(filteredData);
     } catch (err) {
       console.error(err);
     } finally {

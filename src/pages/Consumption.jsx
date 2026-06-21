@@ -11,14 +11,15 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
-import { ROLES, SHIFTS } from '../lib/constants';
+import { ROLES, SHIFTS, ALS_GROUPS } from '../lib/constants';
+import { generateMonthlyBillPdf } from '../lib/pdfGenerator';
 import toast from 'react-hot-toast';
 
 const today = new Date().toISOString().split('T')[0];
 
 export default function Consumption() {
   const { role, profile } = useAuthStore();
-  const { selectedStation } = useStationStore();
+  const { selectedStation, alsGroupFilter } = useStationStore();
   const { logConsumption, fetchConsumptionLogs, fetchInventoryItems } = useInventory(selectedStation?.id);
 
   const [logs, setLogs] = useState([]);
@@ -31,6 +32,9 @@ export default function Consumption() {
   const [allLogs, setAllLogs] = useState([]);
   const [stations, setStations] = useState([]);
   const [alsStation, setAlsStation] = useState('All');
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [billMonth, setBillMonth] = useState(new Date().toISOString().substring(0, 7));
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const [form, setForm] = useState({
     item_id: '', quantity_used: '', consumption_date: today, remarks: '',
@@ -118,8 +122,37 @@ export default function Consumption() {
     }
   };
 
+  const handleGenerateBill = async () => {
+    setGeneratingPdf(true);
+    try {
+      const [year, month] = billMonth.split('-');
+      const startDate = `${year}-${month}-01`;
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from('consumption_logs')
+        .select('*, inventory_items(name, rate_master(brand, unit_rate)), stations(code)')
+        .gte('consumption_date', startDate)
+        .lte('consumption_date', endDate);
+
+      if (error) throw error;
+
+      generateMonthlyBillPdf(month, year, data || [], items);
+      setShowBillModal(false);
+      toast.success('Monthly Bill generated successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to generate bill: ' + (err.message || err.toString()));
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  const allowedStations = ALS_GROUPS[alsGroupFilter];
+
   const displayLogs = role === ROLES.ALS
     ? (alsStation === 'All' ? allLogs : allLogs.filter((l) => l.stations?.code === alsStation))
+      .filter((l) => !allowedStations || allowedStations.includes(l.stations?.code))
     : logs;
 
   const columns = [
@@ -136,18 +169,25 @@ export default function Consumption() {
       title="Daily Consumption"
       subtitle={role === ROLES.ALS ? 'All stations' : selectedStation?.name}
       actions={
-        role === ROLES.SC ? (
-          <Button variant="warning" leftIcon={<Plus size={16} />} onClick={() => setShowForm(true)}>
-            Log Consumption
-          </Button>
-        ) : null
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          {role === ROLES.ALS && (
+            <Button variant="outline" onClick={() => setShowBillModal(true)}>
+              Generate Monthly Bill
+            </Button>
+          )}
+          {role === ROLES.SC && (
+            <Button variant="warning" leftIcon={<Plus size={16} />} onClick={() => setShowForm(true)}>
+              Log Consumption
+            </Button>
+          )}
+        </div>
       }
     >
       {role === ROLES.ALS && (
         <div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
           <select className="form-control" style={{ width: 'auto' }} value={alsStation} onChange={(e) => setAlsStation(e.target.value)}>
             <option value="All">All Stations</option>
-            {stations.map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
+            {stations.filter(s => !allowedStations || allowedStations.includes(s.code)).map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
           </select>
         </div>
       )}
@@ -217,6 +257,36 @@ export default function Consumption() {
               value={form.remarks} onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))} />
           </div>
         </form>
+      </Modal>
+
+      {/* Generate Bill Modal */}
+      <Modal
+        isOpen={showBillModal}
+        onClose={() => setShowBillModal(false)}
+        title="Generate Monthly Bill"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowBillModal(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleGenerateBill} isLoading={generatingPdf}>
+              Download PDF
+            </Button>
+          </>
+        }
+      >
+        <Alert variant="info" style={{ marginBottom: 'var(--space-4)' }}>
+          This will generate a consolidated monthly bill (KMRL-O&M-OPC-FOR-150 format) for all station segments.
+        </Alert>
+        <div className="form-group">
+          <label className="form-label" htmlFor="bill-month">Select Month</label>
+          <input 
+            id="bill-month"
+            type="month" 
+            className="form-control" 
+            value={billMonth}
+            onChange={(e) => setBillMonth(e.target.value)}
+          />
+        </div>
       </Modal>
     </Layout>
   );

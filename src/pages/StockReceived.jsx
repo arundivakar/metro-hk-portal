@@ -11,14 +11,14 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
-import { ROLES } from '../lib/constants';
+import { ROLES, ALS_GROUPS } from '../lib/constants';
 import toast from 'react-hot-toast';
 
 const today = new Date().toISOString().split('T')[0];
 
 export default function StockReceived() {
   const { role, profile } = useAuthStore();
-  const { selectedStation } = useStationStore();
+  const { selectedStation, alsGroupFilter } = useStationStore();
   const { addStockReceived, bulkAddStockReceived, fetchStockReceived, fetchInventoryItems, addNewCatalogueItem } = useInventory(selectedStation?.id);
 
   const [logs, setLogs] = useState([]);
@@ -182,8 +182,11 @@ export default function StockReceived() {
 
   const selectedItem = items.find((i) => i.id === form.item_id);
 
+  const allowedStations = ALS_GROUPS[alsGroupFilter];
+
   const displayLogs = role === ROLES.ALS
     ? (alsStation === 'All' ? allLogs : allLogs.filter((l) => l.stations?.code === alsStation))
+      .filter((l) => !allowedStations || allowedStations.includes(l.stations?.code))
     : logs;
 
   const columns = [
@@ -234,7 +237,7 @@ export default function StockReceived() {
         <div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
           <select className="form-control" style={{ width: 'auto' }} value={alsStation} onChange={(e) => setAlsStation(e.target.value)}>
             <option value="All">All Stations</option>
-            {stations.map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
+            {stations.filter(s => !allowedStations || allowedStations.includes(s.code)).map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
           </select>
         </div>
       )}
@@ -252,6 +255,7 @@ export default function StockReceived() {
       </Card>
 
       {/* Bulk Entry Opening Stock Modal */}
+      {role === ROLES.SC && (
       <Modal
         isOpen={showBulkForm}
         onClose={() => { setShowBulkForm(false); setError(''); }}
@@ -310,8 +314,10 @@ export default function StockReceived() {
           </div>
         </form>
       </Modal>
+      )}
 
       {/* Add Stock Received Modal */}
+      {role === ROLES.SC && (
       <Modal
         isOpen={showForm}
         onClose={() => { setShowForm(false); setError(''); }}
@@ -400,8 +406,10 @@ export default function StockReceived() {
           </div>
         </form>
       </Modal>
+      )}
 
       {/* PNCU ONLY: Add New Master Item Modal */}
+      {selectedStation?.code === 'PNCU' && (
       <Modal
         isOpen={showNewItemForm}
         onClose={() => { setShowNewItemForm(false); setError(''); }}
@@ -476,6 +484,7 @@ export default function StockReceived() {
           </div>
         </form>
       </Modal>
+      )}
     </Layout>
   );
 }

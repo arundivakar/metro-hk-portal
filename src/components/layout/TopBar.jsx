@@ -1,8 +1,8 @@
 import React from 'react';
-import { Bell, MapPin, RefreshCw } from 'lucide-react';
+import { Bell, MapPin, RefreshCw, Menu } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useStationStore } from '../../store/stationStore';
-import { ROLES } from '../../lib/constants';
+import { ROLES, ALS_GROUPS } from '../../lib/constants';
 
 /**
  * TopBar — page title area + station chip + notification placeholder
@@ -11,15 +11,20 @@ import { ROLES } from '../../lib/constants';
  * @param {node} actions - Optional right-side action buttons
  * @param {function} onChangeStation - Called when user clicks "Change" station
  */
-export default function TopBar({ title, subtitle, actions, onChangeStation }) {
+export default function TopBar({ title, subtitle, actions, onChangeStation, onMenuClick }) {
   const { role } = useAuthStore();
-  const { selectedStation } = useStationStore();
+  const { selectedStation, alsGroupFilter, setAlsGroupFilter } = useStationStore();
 
   const showStation = role !== ROLES.ALS && selectedStation;
 
   return (
     <header className="topbar">
       <div className="topbar-left">
+        {onMenuClick && (
+          <button className="btn btn-ghost topbar-menu-btn" onClick={onMenuClick} style={{ padding: 'var(--space-2)' }}>
+            <Menu size={20} />
+          </button>
+        )}
         <div>
           <div className="topbar-title">{title}</div>
           {subtitle && <div className="topbar-subtitle">{subtitle}</div>}
@@ -48,10 +53,28 @@ export default function TopBar({ title, subtitle, actions, onChangeStation }) {
           </div>
         )}
 
-        {/* ALS chip */}
+        {/* ALS Group Dropdown */}
         {role === ROLES.ALS && (
-          <div className="topbar-station-chip" style={{ color: 'var(--color-success-600)', borderColor: 'var(--color-success-200)', background: 'var(--color-success-50)' }}>
-            <span>All Stations</span>
+          <div className="topbar-station-chip" style={{ color: 'var(--color-success-700)', borderColor: 'var(--color-success-300)', background: 'var(--color-success-50)', padding: '2px 8px' }}>
+            <MapPin size={12} />
+            <select
+              value={alsGroupFilter}
+              onChange={(e) => setAlsGroupFilter(e.target.value)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: 'inherit',
+                fontWeight: 600,
+                fontSize: '12px',
+                outline: 'none',
+                cursor: 'pointer',
+                maxWidth: '100px',
+              }}
+            >
+              {Object.keys(ALS_GROUPS).map((group) => (
+                <option key={group} value={group} style={{ color: '#000' }}>{group}</option>
+              ))}
+            </select>
           </div>
         )}
 

@@ -12,7 +12,9 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
-import { ROLES } from '../lib/constants';
+import { ROLES, ALS_GROUPS } from '../lib/constants';
+import Modal from '../components/ui/Modal';
+import Button from '../components/ui/Button';
 
 // ─── Station Dashboard (HKS / SC) ────────────────────────────────────────────
 function StationDashboard({ station }) {
@@ -199,30 +201,99 @@ function StationDashboard({ station }) {
 
 // ─── ALS Dashboard ────────────────────────────────────────────────────────────
 function ALSDashboard() {
+  const { alsGroupFilter } = useStationStore();
   const [stations, setStations] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadALSData();
-  }, []);
+  }, [alsGroupFilter]);
 
   const loadALSData = async () => {
     setIsLoading(true);
     try {
-      const [stationsRes, pendingRes] = await Promise.all([
-        supabase.from('stations').select('id, code, name').eq('is_active', true).order('code'),
-        supabase.from('consumable_requests')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['pending', 'forwarded_als']),
-      ]);
+      const allowedStations = ALS_GROUPS[alsGroupFilter];
 
-      setStations(stationsRes.data ?? []);
+      // 1. Fetch all stations and filter
+      const { data: stationsData, error: stErr } = await supabase
+        .from('stations')
+        .select('id, code, name')
+        .eq('is_active', true)
+        .order('code');
+
+      if (stErr) throw stErr;
+
+      const filteredStations = stationsData.filter((s) => 
+        !allowedStations || allowedStations.includes(s.code)
+      );
+
+      const stationIds = filteredStations.map((s) => s.id);
+
+      // 2. Fetch pending approvals for those stations
+      let query = supabase.from('consumable_requests')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['pending', 'forwarded_als']);
+
+      if (allowedStations && stationIds.length > 0) {
+        query = query.in('station_id', stationIds);
+      } else if (allowedStations && stationIds.length === 0) {
+        // If filter is applied but no stations found, force 0 results
+        query = query.eq('id', '00000000-0000-0000-0000-000000000000'); 
+      }
+
+      const pendingRes = await query;
+
+      setStations(filteredStations);
       setPendingApprovals(pendingRes.count ?? 0);
     } catch (err) {
       console.error('ALS dashboard error:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Station Detail Modal State
+  const [selectedStationDetail, setSelectedStationDetail] = useState(null);
+  const [modalTab, setModalTab] = useState('stock'); // 'stock' or 'consumption'
+  const [modalMonth, setModalMonth] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
+  const [stationStock, setStationStock] = useState([]);
+  const [stationConsumption, setStationConsumption] = useState([]);
+  const [isModalLoading, setIsModalLoading] = useState(false);
+
+  useEffect(() => {
+    if (selectedStationDetail) {
+      loadStationDetails();
+    }
+  }, [selectedStationDetail, modalMonth]); // eslint-disable-line
+
+  const loadStationDetails = async () => {
+    if (!selectedStationDetail) return;
+    setIsModalLoading(true);
+    try {
+      const [year, month] = modalMonth.split('-');
+      const startDate = `${year}-${month}-01`;
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
+
+      if (modalTab === 'stock') {
+        const { data } = await supabase
+          .from('v_station_inventory_summary')
+          .select('*')
+          .eq('station_id', selectedStationDetail.id);
+        setStationStock(data ?? []);
+      } else {
+        const { data } = await supabase
+          .from('consumption_logs')
+          .select('*, inventory_items(name, unit, rate_master(unit_rate))')
+          .eq('station_id', selectedStationDetail.id)
+          .gte('consumption_date', startDate)
+          .lte('consumption_date', endDate);
+        setStationConsumption(data ?? []);
+      }
+    } catch (err) {
+      console.error('Modal fetch error:', err);
+    } finally {
+      setIsModalLoading(false);
     }
   };
 
@@ -261,11 +332,18 @@ function ALSDashboard() {
           ) : (
             <div className="als-stations-grid">
               {stations.map((s) => (
-                <div key={s.id} className="als-station-chip">
+                <div 
+                  key={s.id} 
+                  className="als-station-chip" 
+                  style={{ cursor: 'pointer', transition: 'transform 0.1s' }}
+                  onClick={() => setSelectedStationDetail(s)}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >
                   <div className="als-station-code">{s.code}</div>
                   <div className="als-station-name">{s.name}</div>
                   <div className="als-station-stats">
-                    <Badge variant="primary">Active</Badge>
+                    <Badge variant="primary">View Details</Badge>
                   </div>
                 </div>
               ))}
@@ -273,6 +351,80 @@ function ALSDashboard() {
           )}
         </CardBody>
       </Card>
+
+      <Modal
+        isOpen={!!selectedStationDetail}
+        onClose={() => { setSelectedStationDetail(null); setModalTab('stock'); }}
+        title={`${selectedStationDetail?.code} — ${selectedStationDetail?.name} Overview`}
+        size="lg"
+        footer={<Button variant="outline" onClick={() => setSelectedStationDetail(null)}>Close</Button>}
+      >
+        <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--color-border)' }}>
+          <button 
+            className={`btn ${modalTab === 'stock' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setModalTab('stock')}
+            style={{ borderRadius: 'var(--radius-md) var(--radius-md) 0 0', borderBottom: modalTab === 'stock' ? 'none' : '' }}
+          >
+            <Package size={16} /> Current Stock
+          </button>
+          <button 
+            className={`btn ${modalTab === 'consumption' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setModalTab('consumption')}
+            style={{ borderRadius: 'var(--radius-md) var(--radius-md) 0 0', borderBottom: modalTab === 'consumption' ? 'none' : '' }}
+          >
+            <TrendingDown size={16} /> Monthly Consumption
+          </button>
+        </div>
+
+        {modalTab === 'stock' && (
+          <DataTable
+            columns={[
+              { key: 'item_name', label: 'Item Name', sortable: true },
+              { key: 'category', label: 'Category' },
+              { key: 'current_stock', label: 'Quantity on Hand', render: (v, r) => `${v} ${r.unit}` },
+            ]}
+            data={stationStock.map(r => ({ ...r, id: r.item_id }))}
+            isLoading={isModalLoading}
+            emptyTitle="No stock data"
+            emptyDesc="This station currently has no inventory records."
+          />
+        )}
+
+        {modalTab === 'consumption' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 'var(--space-4)' }}>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-1)' }}>Total Estimated Cost</div>
+                <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, color: 'var(--color-danger-600)' }}>
+                  ₹{stationConsumption.reduce((sum, r) => sum + (Number(r.quantity_used) * Number(r.inventory_items?.rate_master?.unit_rate || 0)), 0).toFixed(2)}
+                </div>
+              </div>
+              <input 
+                type="month" 
+                className="form-control" 
+                style={{ width: 'auto' }}
+                value={modalMonth}
+                onChange={(e) => setModalMonth(e.target.value)}
+              />
+            </div>
+            <DataTable
+              columns={[
+                { key: 'consumption_date', label: 'Date', sortable: true },
+                { key: 'item_name', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },
+                { key: 'quantity_used', label: 'Quantity Used', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
+                { key: 'cost', label: 'Estimated Cost', render: (_, r) => {
+                  const rate = r.inventory_items?.rate_master?.unit_rate || 0;
+                  return rate > 0 ? `₹${(Number(r.quantity_used) * rate).toFixed(2)}` : '—';
+                }},
+              ]}
+              data={stationConsumption.map(r => ({ ...r, id: r.id }))}
+              isLoading={isModalLoading}
+              emptyTitle="No consumption"
+              emptyDesc={`No items were consumed in ${modalMonth}.`}
+            />
+          </>
+        )}
+      </Modal>
     </>
   );
 }
@@ -287,7 +439,7 @@ export default function Dashboard() {
   return (
     <Layout
       title={isALS ? 'ALS Dashboard' : 'Station Dashboard'}
-      subtitle={isALS ? 'All stations overview' : selectedStation?.name}
+      subtitle={isALS ? (useStationStore().alsGroupFilter === 'ALL STATIONS' ? 'All stations overview' : `${useStationStore().alsGroupFilter} overview`) : selectedStation?.name}
     >
       {isALS ? <ALSDashboard /> : <StationDashboard station={selectedStation} />}
     </Layout>

@@ -10,12 +10,12 @@ import { AssetStatusBadge } from '../components/ui/Badge';
 import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { supabase } from '../lib/supabase';
-import { ROLES, ASSET_STATUS, ASSET_STATUS_LABELS } from '../lib/constants';
+import { ROLES, ASSET_STATUS, ASSET_STATUS_LABELS, ALS_GROUPS } from '../lib/constants';
 import toast from 'react-hot-toast';
 
 export default function AssetLifecycle() {
   const { role, profile } = useAuthStore();
-  const { selectedStation } = useStationStore();
+  const { selectedStation, alsGroupFilter } = useStationStore();
 
   const [activeTab, setActiveTab] = useState('assets'); // 'assets' or 'history'
   const [assets, setAssets] = useState([]);
@@ -35,10 +35,12 @@ export default function AssetLifecycle() {
   const [alsStation, setAlsStation] = useState('All');
   const [stations, setStations] = useState([]);
 
+  const allowedStations = ALS_GROUPS[alsGroupFilter];
+
   const stageCounts = {
-    in_use: assets.filter((a) => a.status === ASSET_STATUS.IN_USE).length,
-    partially_damaged: assets.filter((a) => a.status === ASSET_STATUS.PARTIALLY_DAMAGED).length,
-    disposed: assets.filter((a) => a.status === ASSET_STATUS.DISPOSED).length,
+    in_use: assets.filter((a) => a.status === ASSET_STATUS.IN_USE && (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))).length,
+    partially_damaged: assets.filter((a) => a.status === ASSET_STATUS.PARTIALLY_DAMAGED && (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))).length,
+    disposed: assets.filter((a) => a.status === ASSET_STATUS.DISPOSED && (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))).length,
   };
 
   useEffect(() => { 
@@ -150,6 +152,11 @@ export default function AssetLifecycle() {
 
   const filteredAssets = assets
     .filter((a) => statusFilter === 'All' || a.status === statusFilter)
+    .filter((a) => role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))
+    .filter((a) => role !== ROLES.ALS || alsStation === 'All' || a.stations?.code === alsStation);
+
+  const filteredHistory = historyLogs
+    .filter((a) => role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))
     .filter((a) => role !== ROLES.ALS || alsStation === 'All' || a.stations?.code === alsStation);
 
   const assetColumns = [
@@ -256,7 +263,7 @@ export default function AssetLifecycle() {
             {role === ROLES.ALS && (
               <select className="form-control" style={{ width: 'auto' }} value={alsStation} onChange={(e) => setAlsStation(e.target.value)}>
                 <option value="All">All Stations</option>
-                {stations.map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
+                {stations.filter(s => !allowedStations || allowedStations.includes(s.code)).map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
               </select>
             )}
           </div>
@@ -277,10 +284,18 @@ export default function AssetLifecycle() {
 
       {activeTab === 'history' && (
         <Card>
-          <CardHeader title="Transition History Log" icon={<History size={16} />} subtitle={`${historyLogs.length} transitions`} />
+          <div className="filter-bar" style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-4) var(--space-4) 0' }}>
+            {role === ROLES.ALS && (
+              <select className="form-control" style={{ width: 'auto' }} value={alsStation} onChange={(e) => setAlsStation(e.target.value)}>
+                <option value="All">All Stations</option>
+                {stations.filter(s => !allowedStations || allowedStations.includes(s.code)).map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
+              </select>
+            )}
+          </div>
+          <CardHeader title="Transition History Log" icon={<History size={16} />} subtitle={`${filteredHistory.length} transitions`} />
           <DataTable
             columns={historyColumns}
-            data={historyLogs.map((a) => ({ ...a, id: a.id }))}
+            data={filteredHistory.map((a) => ({ ...a, id: a.id }))}
             isLoading={isLoading}
             emptyTitle="No history yet"
             emptyDesc="Asset status changes will appear here matching your Excel sheet."

@@ -8,12 +8,12 @@ import Alert from '../components/ui/Alert';
 import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
-import { ROLES } from '../lib/constants';
+import { ROLES, ALS_GROUPS } from '../lib/constants';
 import { supabase } from '../lib/supabase';
 
 export default function Inventory() {
   const { role } = useAuthStore();
-  const { selectedStation } = useStationStore();
+  const { selectedStation, alsGroupFilter } = useStationStore();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [allStationsInventory, setAllStationsInventory] = useState([]);
@@ -53,31 +53,49 @@ export default function Inventory() {
   const rawData = role === ROLES.ALS ? allStationsInventory : inventory;
   const isLoadingData = role === ROLES.ALS ? alsLoading : isLoading;
 
-  const displayData = rawData
-    .filter((row) => {
-      const name = (row.item_name ?? '').toLowerCase();
-      const matchSearch = !search || name.includes(search.toLowerCase());
-      const matchCategory = categoryFilter === 'All' || row.category === categoryFilter;
-      const matchStation = role !== ROLES.ALS || stationFilter === 'All' || row.station_code === stationFilter;
-      return matchSearch && matchCategory && matchStation;
-    })
-    .map((row) => ({
-      id: row.item_id + '-' + row.station_id,
-      station_code: row.station_code,
-      item_name: row.item_name ?? '—',
-      category: row.category ?? '—',
-      unit: row.unit ?? '—',
-      tender_year: row.tender_year ?? '—',
-      brand_name: row.brand_name ?? '—',
-      unit_rate: row.unit_rate ? `₹${row.unit_rate}` : '—',
-      current_stock: row.current_stock,
-      min_stock_level: row.min_stock_level ?? 0,
-      last_updated: row.last_updated ? new Date(row.last_updated).toLocaleDateString('en-IN') : '—',
-      is_low: row.is_low_stock,
-      _rowClass: row.is_low_stock ? 'low-stock-row' : '',
-    }));
+  let filteredData = rawData.filter((row) => {
+    // ALS Group Filter logic
+    const allowedStations = ALS_GROUPS[alsGroupFilter];
+    if (role === ROLES.ALS && allowedStations && !allowedStations.includes(row.station_code)) {
+      return false;
+    }
 
-  const lowStockCount = displayData.filter((r) => r.is_low).length;
+    const name = (row.item_name ?? '').toLowerCase();
+    const matchSearch = !search || name.includes(search.toLowerCase());
+    const matchCategory = categoryFilter === 'All' || row.category === categoryFilter;
+    const matchStation = role !== ROLES.ALS || stationFilter === 'All' || row.station_code === stationFilter;
+    return matchSearch && matchCategory && matchStation;
+  });
+
+  if (role === ROLES.ALS) {
+    // Aggregate data by item_id for ALS
+    const grouped = {};
+    filteredData.forEach((row) => {
+      if (!grouped[row.item_id]) {
+        grouped[row.item_id] = { ...row, current_stock: 0 };
+      }
+      grouped[row.item_id].current_stock += Number(row.current_stock);
+    });
+    filteredData = Object.values(grouped);
+  }
+
+  const displayData = filteredData.map((row) => ({
+    id: role === ROLES.ALS ? row.item_id : (row.item_id + '-' + row.station_id),
+    station_code: row.station_code,
+    item_name: row.item_name ?? '—',
+    category: row.category ?? '—',
+    unit: row.unit ?? '—',
+    tender_year: row.tender_year ?? '—',
+    brand_name: row.brand_name ?? '—',
+    unit_rate: row.unit_rate ? `₹${row.unit_rate}` : '—',
+    current_stock: Number(row.current_stock).toFixed(2).replace(/\.00$/, ''),
+    min_stock_level: row.min_stock_level ?? 0,
+    last_updated: row.last_updated ? new Date(row.last_updated).toLocaleDateString('en-IN') : '—',
+    is_low: role === ROLES.ALS ? false : row.is_low_stock, // Disable low stock highlighting for aggregated ALS view
+    _rowClass: (role !== ROLES.ALS && row.is_low_stock) ? 'low-stock-row' : '',
+  }));
+
+  const lowStockCount = role === ROLES.ALS ? 0 : displayData.filter((r) => r.is_low).length;
 
   // Station list for ALS filter
   const stationCodes = role === ROLES.ALS
@@ -85,10 +103,6 @@ export default function Inventory() {
     : [];
 
   const columns = [
-    ...(role === ROLES.ALS ? [{
-      key: 'station_code', label: 'Station', sortable: true,
-      render: (v) => <Badge variant="primary">{v}</Badge>,
-    }] : []),
     { key: 'item_name', label: 'Item Name', sortable: true },
     { key: 'tender_year', label: 'Tender Year' },
     { key: 'brand_name', label: 'Brand Name' },
@@ -156,20 +170,6 @@ export default function Inventory() {
               <option value="Chemical">Chemical</option>
               <option value="Consumable">Consumable</option>
             </select>
-            {role === ROLES.ALS && (
-              <select
-                id="station-filter"
-                className="form-control"
-                style={{ width: 'auto' }}
-                value={stationFilter}
-                onChange={(e) => setStationFilter(e.target.value)}
-              >
-                <option value="All">All Stations</option>
-                {stationCodes.map((code) => (
-                  <option key={code} value={code}>{code}</option>
-                ))}
-              </select>
-            )}
           </div>
         </CardBody>
         <DataTable

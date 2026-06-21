@@ -4,22 +4,22 @@
 /* ─── Design Tokens ──────────────────────────────────────────────────────────── */
 :root {
   /* Metro Colour Palette */
-  --color-primary-900: #0a1628;
-  --color-primary-800: #0f2040;
-  --color-primary-700: #163058;
-  --color-primary-600: #1e3a5f;
-  --color-primary-500: #274d7e;
-  --color-primary-400: #3a6499;
-  --color-primary-300: #5c87b8;
-  --color-primary-200: #8fb3d4;
-  --color-primary-100: #c4daea;
-  --color-primary-50:  #eaf2f8;
+  --color-primary-900: #003634;
+  --color-primary-800: #004e4c;
+  --color-primary-700: #006764;
+  --color-primary-600: #00827f;
+  --color-primary-500: #00a5a0;
+  --color-primary-400: #33b7b3;
+  --color-primary-300: #66c9c6;
+  --color-primary-200: #99dbd9;
+  --color-primary-100: #ccedec;
+  --color-primary-50:  #e5f6f6;
 
-  --color-accent-600: #007ea3;
-  --color-accent-500: #00b4d8;
-  --color-accent-400: #48cae4;
-  --color-accent-300: #90e0ef;
-  --color-accent-100: #caf0f8;
+  --color-accent-600: #8ca127;
+  --color-accent-500: #b8d433;
+  --color-accent-400: #c6dc5c;
+  --color-accent-300: #d4e585;
+  --color-accent-100: #f0f7d6;
 
   --color-success-700: #1a4731;
   --color-success-600: #2d6a4f;

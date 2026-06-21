@@ -23,7 +23,7 @@ function getInitials(name = '') {
     .join('');
 }
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const [collapsed, setCollapsed] = useState(false);
   const { profile, role, logout } = useAuthStore();
   const { selectedStation, clearStation } = useStationStore();
@@ -38,7 +38,11 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <>
+      {mobileOpen && (
+        <div className="mobile-overlay active" onClick={() => setMobileOpen(false)} />
+      )}
+      <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       {/* Brand */}
       <div className="sidebar-brand">
         <div className="sidebar-brand-icon">
@@ -72,6 +76,7 @@ export default function Sidebar() {
                 `sidebar-nav-item${isActive ? ' active' : ''}`
               }
               title={collapsed ? item.label : undefined}
+              onClick={() => setMobileOpen(false)}
             >
               <span className="sidebar-nav-icon">
                 {IconComponent && <IconComponent size={18} />}
@@ -119,5 +124,6 @@ export default function Sidebar() {
         {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
       </button>
     </aside>
+    </>
   );
 }

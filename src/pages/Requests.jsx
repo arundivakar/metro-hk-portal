@@ -11,14 +11,14 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
-import { ROLES, PRIORITY, APPROVAL_THRESHOLD } from '../lib/constants';
+import { ROLES, PRIORITY, APPROVAL_THRESHOLD, ALS_GROUPS } from '../lib/constants';
 import toast from 'react-hot-toast';
 
 const today = new Date().toISOString().split('T')[0];
 
 export default function Requests() {
   const { role, profile } = useAuthStore();
-  const { selectedStation } = useStationStore();
+  const { selectedStation, alsGroupFilter } = useStationStore();
   const { fetchInventoryItems } = useInventory(selectedStation?.id);
 
   const [requests, setRequests] = useState([]);
@@ -59,7 +59,16 @@ export default function Requests() {
 
       const { data, error: err } = await query;
       if (err) throw err;
-      setRequests(data ?? []);
+      
+      let filteredData = data ?? [];
+      if (role === ROLES.ALS) {
+        const allowedStations = ALS_GROUPS[alsGroupFilter];
+        if (allowedStations) {
+          filteredData = filteredData.filter(r => r.stations && allowedStations.includes(r.stations.code));
+        }
+      }
+      
+      setRequests(filteredData);
     } catch (err) {
       console.error(err);
     } finally {

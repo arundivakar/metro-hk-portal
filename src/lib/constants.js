@@ -106,3 +106,12 @@ export const NAV_ITEMS = {
     { path: '/reports', label: 'Reports', icon: 'BarChart2' },
   ],
 };
+
+// ─── ALS Station Groups ───────────────────────────────────────────────────────
+export const ALS_GROUPS = {
+  'ALL STATIONS': null, // null means no filter
+  'ALVA-KLMT': ['ALVA', 'PNCU', 'CPPY', 'AATK', 'MUTT', 'KLMT'],
+  'CCUV-JLSD': ['CCUV', 'PDPM', 'EDAP', 'CGPP', 'PARV', 'JLSD'],
+  'KALR-KVTR': ['KALR', 'TNHL', 'MGRD', 'MACE', 'ERSH', 'KVTR'],
+  'EMKM-TPHT': ['EMKM', 'VYTA', 'TKDM', 'PETT', 'VAKK', 'SNJN', 'TPHT'],
+};

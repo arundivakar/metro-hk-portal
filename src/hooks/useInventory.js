@@ -104,7 +104,7 @@ export function useInventory(stationId) {
   const fetchInventoryItems = useCallback(async () => {
     const { data, error: err } = await supabase
       .from('inventory_items')
-      .select('*, rate_master ( unit_rate, tender_year )')
+      .select('*, rate_master ( unit_rate, tender_year, brand )')
       .eq('is_active', true)
       .order('name');
     if (err) throw err;
