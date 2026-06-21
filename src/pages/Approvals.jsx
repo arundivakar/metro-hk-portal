@@ -1,0 +1,243 @@
+import React, { useEffect, useState } from 'react';
+import { CheckSquare, Check, X, ArrowRight, CheckCircle2 } from 'lucide-react';
+import Layout from '../components/layout/Layout';
+import { Card, CardHeader, CardBody } from '../components/ui/Card';
+import DataTable from '../components/ui/DataTable';
+import Modal from '../components/ui/Modal';
+import Button from '../components/ui/Button';
+import Alert from '../components/ui/Alert';
+import { RequestStatusBadge, PriorityBadge } from '../components/ui/Badge';
+import { useAuthStore } from '../store/authStore';
+import { useStationStore } from '../store/stationStore';
+import { supabase } from '../lib/supabase';
+import { ROLES, REQUEST_STATUS, APPROVAL_THRESHOLD } from '../lib/constants';
+import toast from 'react-hot-toast';
+
+export default function Approvals() {
+  const { role, profile } = useAuthStore();
+  const { selectedStation } = useStationStore();
+
+  const [requests, setRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selected, setSelected] = useState(null); // selected request for action modal
+  const [action, setAction] = useState(''); // 'approved' | 'rejected' | 'completed'
+  const [comments, setComments] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => { loadRequests(); }, [selectedStation?.id, role]); // eslint-disable-line
+
+  const loadRequests = async () => {
+    setIsLoading(true);
+    try {
+      let query = supabase.from('consumable_requests')
+        .select(`
+          *,
+          inventory_items ( name, unit ),
+          stations ( code, name ),
+          users_profile!consumable_requests_requested_by_fkey ( full_name, employee_id )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (role === ROLES.SC) {
+        // SC sees pending requests for their station (those not yet forwarded)
+        query = query
+          .eq('station_id', selectedStation?.id)
+          .in('status', [REQUEST_STATUS.PENDING]);
+      } else if (role === ROLES.ALS) {
+        // ALS sees forwarded requests
+        query = query.in('status', [REQUEST_STATUS.FORWARDED_ALS]);
+      }
+
+      const { data, error: err } = await query;
+      if (err) throw err;
+      setRequests(data ?? []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openAction = (req, act) => {
+    setSelected(req);
+    setAction(act);
+    setComments('');
+    setError('');
+  };
+
+  const handleAction = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      let newStatus = '';
+      if (action === 'approved') {
+        newStatus = role === ROLES.SC ? REQUEST_STATUS.APPROVED_SC : REQUEST_STATUS.APPROVED_ALS;
+      } else if (action === 'rejected') {
+        newStatus = REQUEST_STATUS.REJECTED;
+      } else if (action === 'forwarded') {
+        newStatus = REQUEST_STATUS.FORWARDED_ALS;
+      } else if (action === 'completed') {
+        newStatus = REQUEST_STATUS.COMPLETED;
+      }
+
+      // Update request status
+      const { error: updateErr } = await supabase
+        .from('consumable_requests')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', selected.id);
+      if (updateErr) throw updateErr;
+
+      // Insert approval record
+      const { error: approvalErr } = await supabase.from('request_approvals').insert({
+        request_id: selected.id,
+        acted_by: profile.id,
+        action,
+        comments: comments || null,
+      });
+      if (approvalErr) throw approvalErr;
+
+      toast.success(`Request ${action} successfully!`);
+      setSelected(null);
+      loadRequests();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const columns = [
+    { key: 'created_at', label: 'Date', sortable: true, render: (v) => new Date(v).toLocaleDateString('en-IN') },
+    { key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' },
+    { key: 'requested_by', label: 'Requested By', render: (_, r) => r.users_profile?.full_name ?? r.users_profile?.employee_id ?? '—' },
+    { key: 'item', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },
+    { key: 'quantity', label: 'Qty', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
+    {
+      key: 'estimated_cost', label: 'Est. Cost',
+      render: (v) => v ? (
+        <span style={{ fontWeight: 600, color: Number(v) > APPROVAL_THRESHOLD ? 'var(--color-danger-600)' : 'var(--color-success-600)' }}>
+          ₹{Number(v).toFixed(2)}
+        </span>
+      ) : '—',
+    },
+    { key: 'priority', label: 'Priority', render: (v) => <PriorityBadge priority={v} /> },
+    { key: 'status', label: 'Status', render: (v) => <RequestStatusBadge status={v} /> },
+    {
+      key: 'actions', label: 'Actions',
+      render: (_, r) => (
+        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
+          {/* SC actions */}
+          {role === ROLES.SC && r.status === REQUEST_STATUS.PENDING && (
+            <>
+              <Button variant="success" size="sm" leftIcon={<Check size={12} />} onClick={() => openAction(r, 'approved')}>
+                Approve
+              </Button>
+              <Button variant="danger" size="sm" leftIcon={<X size={12} />} onClick={() => openAction(r, 'rejected')}>
+                Reject
+              </Button>
+              <Button variant="outline" size="sm" leftIcon={<ArrowRight size={12} />} onClick={() => openAction(r, 'forwarded')}>
+                Forward
+              </Button>
+            </>
+          )}
+          {/* ALS actions */}
+          {role === ROLES.ALS && r.status === REQUEST_STATUS.FORWARDED_ALS && (
+            <>
+              <Button variant="success" size="sm" leftIcon={<Check size={12} />} onClick={() => openAction(r, 'approved')}>
+                Approve
+              </Button>
+              <Button variant="danger" size="sm" leftIcon={<X size={12} />} onClick={() => openAction(r, 'rejected')}>
+                Reject
+              </Button>
+            </>
+          )}
+          {/* Mark completed */}
+          {(r.status === REQUEST_STATUS.APPROVED_SC || r.status === REQUEST_STATUS.APPROVED_ALS) && (
+            <Button variant="accent" size="sm" leftIcon={<CheckCircle2 size={12} />} onClick={() => openAction(r, 'completed')}>
+              Complete
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const pageTitle = role === ROLES.SC ? 'Pending Approvals' : 'Forwarded Requests';
+  const pageSubtitle = role === ROLES.SC
+    ? `${requests.length} request${requests.length !== 1 ? 's' : ''} pending your action`
+    : `${requests.length} request${requests.length !== 1 ? 's' : ''} forwarded to ALS`;
+
+  const actionLabels = {
+    approved: { label: 'Approve', variant: 'success' },
+    rejected: { label: 'Reject', variant: 'danger' },
+    forwarded: { label: 'Forward to ALS', variant: 'warning' },
+    completed: { label: 'Mark as Completed', variant: 'accent' },
+  };
+
+  return (
+    <Layout title={pageTitle} subtitle={pageSubtitle}>
+      <Card>
+        <CardHeader title={pageTitle} icon={<CheckSquare size={16} />} />
+        <DataTable
+          columns={columns}
+          data={requests.map((r) => ({ ...r, id: r.id }))}
+          isLoading={isLoading}
+          emptyTitle="No pending items"
+          emptyDesc="All caught up! There are no requests awaiting your action."
+          emptyIcon={<CheckSquare size={28} />}
+        />
+      </Card>
+
+      {/* Action Confirmation Modal */}
+      <Modal
+        isOpen={!!selected}
+        onClose={() => setSelected(null)}
+        title={`${actionLabels[action]?.label ?? 'Action'} Request`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setSelected(null)}>Cancel</Button>
+            <Button
+              variant={actionLabels[action]?.variant ?? 'primary'}
+              isLoading={submitting}
+              onClick={handleAction}
+            >
+              {actionLabels[action]?.label ?? 'Confirm'}
+            </Button>
+          </>
+        }
+      >
+        {selected && (
+          <>
+            {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
+            <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)' }}>
+              <p><strong>Item:</strong> {selected.inventory_items?.name}</p>
+              <p><strong>Quantity:</strong> {selected.quantity} {selected.inventory_items?.unit}</p>
+              <p><strong>Estimated Cost:</strong> ₹{Number(selected.estimated_cost ?? 0).toFixed(2)}</p>
+              <p><strong>Station:</strong> {selected.stations?.code}</p>
+              {selected.reason && <p><strong>Reason:</strong> {selected.reason}</p>}
+            </div>
+            {action === 'completed' && (
+              <Alert variant="warning" style={{ marginBottom: 'var(--space-4)' }}>
+                Marking as completed will deduct {selected.quantity} {selected.inventory_items?.unit} from station inventory.
+              </Alert>
+            )}
+            <div className="form-group">
+              <label className="form-label" htmlFor="approval-comments">Comments (optional)</label>
+              <textarea
+                id="approval-comments"
+                className="form-control"
+                rows={3}
+                value={comments}
+                onChange={(e) => setComments(e.target.value)}
+                placeholder="Add a comment or reason…"
+              />
+            </div>
+          </>
+        )}
+      </Modal>
+    </Layout>
+  );
+}

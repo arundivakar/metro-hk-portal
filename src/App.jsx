@@ -1,0 +1,150 @@
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { useAuth } from './hooks/useAuth';
+
+// Auth
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import StationSelectorModal from './components/station/StationSelectorModal';
+
+// Pages
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Inventory from './pages/Inventory';
+import StockReceived from './pages/StockReceived';
+import Consumption from './pages/Consumption';
+import Requests from './pages/Requests';
+import Approvals from './pages/Approvals';
+import AssetLifecycle from './pages/AssetLifecycle';
+import Reports from './pages/Reports';
+import NotFound from './pages/NotFound';
+
+// Styles
+import './styles/index.css';
+import './styles/layout.css';
+import './styles/components.css';
+import './styles/pages.css';
+
+import { ROLES } from './lib/constants';
+
+export default function App() {
+  useAuth(); // Initialize auth listener
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public */}
+        <Route path="/login" element={<Login />} />
+
+        {/* Station Selection — HKS & SC only */}
+        <Route
+          path="/select-station"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.HKS, ROLES.SC]}>
+              <StationSelectorModal />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Protected App Routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/inventory"
+          element={
+            <ProtectedRoute>
+              <Inventory />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/stock-received"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS]}>
+              <StockReceived />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/consumption"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS]}>
+              <Consumption />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/requests"
+          element={
+            <ProtectedRoute>
+              <Requests />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/approvals"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS]}>
+              <Approvals />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/assets"
+          element={
+            <ProtectedRoute>
+              <AssetLifecycle />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS]}>
+              <Reports />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Default redirect */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+        {/* 404 */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+
+      {/* Global Toast Notifications */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '14px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          },
+          success: {
+            iconTheme: { primary: '#2d6a4f', secondary: '#fff' },
+          },
+          error: {
+            iconTheme: { primary: '#d62828', secondary: '#fff' },
+          },
+        }}
+      />
+    </BrowserRouter>
+  );
+}
