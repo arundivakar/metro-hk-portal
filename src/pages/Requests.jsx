@@ -61,7 +61,7 @@ export default function Requests() {
       if (err) throw err;
       
       let filteredData = data ?? [];
-      if (role === ROLES.ALS) {
+      if ((role === ROLES.ALS || role === ROLES.HKTL)) {
         const allowedStations = ALS_GROUPS[alsGroupFilter];
         if (allowedStations) {
           filteredData = filteredData.filter(r => r.stations && allowedStations.includes(r.stations.code));
@@ -135,7 +135,7 @@ export default function Requests() {
   return (
     <Layout
       title="Consumable Requests"
-      subtitle={role === ROLES.ALS ? 'All stations' : selectedStation?.name}
+      subtitle={(role === ROLES.ALS || role === ROLES.HKTL) ? 'All stations' : selectedStation?.name}
       actions={
         role === ROLES.HKS ? (
           <Button variant="accent" leftIcon={<Plus size={16} />} onClick={() => setShowForm(true)}>

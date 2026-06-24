@@ -13,7 +13,7 @@ export default function Login() {
   // Already logged in — redirect appropriately
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (role === ROLES.ALS) {
+    if (role === ROLES.ALS || role === ROLES.HKTL) {
       navigate('/dashboard', { replace: true });
     } else if (selectedStation) {
       navigate('/dashboard', { replace: true });
@@ -24,7 +24,7 @@ export default function Login() {
 
   const handleLoginSuccess = () => {
     const { role: r } = useAuthStore.getState();
-    if (r === ROLES.ALS) {
+    if (r === ROLES.ALS || r === ROLES.HKTL) {
       navigate('/dashboard', { replace: true });
     } else {
       navigate('/select-station', { replace: true });

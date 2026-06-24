@@ -13,7 +13,7 @@ export default function Reports() {
   return (
     <Layout
       title="Reports"
-      subtitle={role === ROLES.ALS ? 'System-wide analytics' : selectedStation?.name}
+      subtitle={(role === ROLES.ALS || role === ROLES.HKTL) ? 'System-wide analytics' : selectedStation?.name}
     >
       <Card>
         <CardBody>

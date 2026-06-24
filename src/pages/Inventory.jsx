@@ -48,13 +48,13 @@ export default function Inventory() {
   const [isImporting, setIsImporting] = useState(false);
 
   const { inventory, isLoading, fetchInventory, getLowStockItems } = useInventory(
-    role !== ROLES.ALS ? selectedStation?.id : null
+    (role !== ROLES.ALS && role !== ROLES.HKTL) ? selectedStation?.id : null
   );
 
   useEffect(() => {
-    if (role !== ROLES.ALS && selectedStation?.id) {
+    if ((role !== ROLES.ALS && role !== ROLES.HKTL) && selectedStation?.id) {
       fetchInventory(selectedStation.id);
-    } else if (role === ROLES.ALS) {
+    } else if ((role === ROLES.ALS || role === ROLES.HKTL)) {
       loadAllInventory();
     }
   }, [selectedStation?.id, role]); // eslint-disable-line
@@ -107,7 +107,7 @@ export default function Inventory() {
       toast.success("Inventory imported successfully!");
       setIsImportModalOpen(false);
       setImportWipe(false);
-      if (role !== ROLES.ALS && selectedStation?.id) {
+      if ((role !== ROLES.ALS && role !== ROLES.HKTL) && selectedStation?.id) {
         fetchInventory(selectedStation.id);
       } else {
         loadAllInventory();
@@ -136,24 +136,24 @@ export default function Inventory() {
   };
 
   // Build display data
-  const rawData = role === ROLES.ALS ? allStationsInventory : inventory;
-  const isLoadingData = role === ROLES.ALS ? alsLoading : isLoading;
+  const rawData = (role === ROLES.ALS || role === ROLES.HKTL) ? allStationsInventory : inventory;
+  const isLoadingData = (role === ROLES.ALS || role === ROLES.HKTL) ? alsLoading : isLoading;
 
   let filteredData = rawData.filter((row) => {
     // ALS Group Filter logic
     const allowedStations = ALS_GROUPS[alsGroupFilter];
-    if (role === ROLES.ALS && allowedStations && !allowedStations.includes(row.station_code)) {
+    if ((role === ROLES.ALS || role === ROLES.HKTL) && allowedStations && !allowedStations.includes(row.station_code)) {
       return false;
     }
 
     const name = (row.item_name ?? '').toLowerCase();
     const matchSearch = !search || name.includes(search.toLowerCase());
     const matchCategory = categoryFilter === 'All' || row.category === categoryFilter;
-    const matchStation = role !== ROLES.ALS || stationFilter === 'All' || row.station_code === stationFilter;
+    const matchStation = (role !== ROLES.ALS && role !== ROLES.HKTL) || stationFilter === 'All' || row.station_code === stationFilter;
     return matchSearch && matchCategory && matchStation;
   });
 
-  if (role === ROLES.ALS) {
+  if ((role === ROLES.ALS || role === ROLES.HKTL)) {
     // Aggregate data by item_id for ALS
     const grouped = {};
     filteredData.forEach((row) => {
@@ -166,7 +166,7 @@ export default function Inventory() {
   }
 
   const displayData = filteredData.map((row) => ({
-    id: role === ROLES.ALS ? row.item_id : (row.item_id + '-' + row.station_id),
+    id: (role === ROLES.ALS || role === ROLES.HKTL) ? row.item_id : (row.item_id + '-' + row.station_id),
     station_code: row.station_code,
     item_name: row.item_name ?? '—',
     category: row.category ?? '—',
@@ -177,14 +177,14 @@ export default function Inventory() {
     current_stock: Number(row.current_stock).toFixed(2).replace(/\.00$/, ''),
     min_stock_level: row.min_stock_level ?? 0,
     last_updated: row.last_updated ? new Date(row.last_updated).toLocaleDateString('en-IN') : '—',
-    is_low: role === ROLES.ALS ? false : row.is_low_stock, // Disable low stock highlighting for aggregated ALS view
-    _rowClass: (role !== ROLES.ALS && row.is_low_stock) ? 'low-stock-row' : '',
+    is_low: (role === ROLES.ALS || role === ROLES.HKTL) ? false : row.is_low_stock, // Disable low stock highlighting for aggregated ALS view
+    _rowClass: ((role !== ROLES.ALS && role !== ROLES.HKTL) && row.is_low_stock) ? 'low-stock-row' : '',
   }));
 
-  const lowStockCount = role === ROLES.ALS ? 0 : displayData.filter((r) => r.is_low).length;
+  const lowStockCount = (role === ROLES.ALS || role === ROLES.HKTL) ? 0 : displayData.filter((r) => r.is_low).length;
 
   // Station list for ALS filter
-  const stationCodes = role === ROLES.ALS
+  const stationCodes = (role === ROLES.ALS || role === ROLES.HKTL)
     ? [...new Set(allStationsInventory.map((r) => r.station_code).filter(Boolean))].sort()
     : [];
 
@@ -214,8 +214,8 @@ export default function Inventory() {
 
   return (
     <Layout
-      title={role === ROLES.ALS ? 'All Station Inventory' : 'Inventory'}
-      subtitle={role === ROLES.ALS ? 'Stock levels across all 25 stations' : selectedStation?.name}
+      title={(role === ROLES.ALS || role === ROLES.HKTL) ? 'All Station Inventory' : 'Inventory'}
+      subtitle={(role === ROLES.ALS || role === ROLES.HKTL) ? 'Stock levels across all 25 stations' : selectedStation?.name}
     >
       {lowStockCount > 0 && (
         <Alert variant="warning" className="animate-fade-in" style={{ marginBottom: 'var(--space-4)' }}>
@@ -230,7 +230,7 @@ export default function Inventory() {
           icon={<Package size={16} />}
           subtitle={`${displayData.length} items`}
           action={
-            (role === ROLES.SC || role === ROLES.ALS) && (
+            (role === ROLES.SC || (role === ROLES.ALS || role === ROLES.HKTL)) && (
               <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
                 <UploadCloud size={14} /> Import CSV
               </Button>

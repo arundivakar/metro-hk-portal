@@ -481,15 +481,14 @@ function ALSDashboard() {
 export default function Dashboard() {
   const { role } = useAuthStore();
   const { selectedStation } = useStationStore();
-
-  const isALS = role === ROLES.ALS;
+  const isGlobal = role === ROLES.ALS || role === ROLES.HKTL;
 
   return (
     <Layout
-      title={isALS ? 'ALS Dashboard' : 'Station Dashboard'}
-      subtitle={isALS ? (useStationStore().alsGroupFilter === 'ALL STATIONS' ? 'All stations overview' : `${useStationStore().alsGroupFilter} overview`) : selectedStation?.name}
+      title={isGlobal ? (role === ROLES.ALS ? 'ALS Dashboard' : 'HKTL Dashboard') : 'Station Dashboard'}
+      subtitle={isGlobal ? (useStationStore().alsGroupFilter === 'ALL STATIONS' ? 'All stations overview' : `${useStationStore().alsGroupFilter} overview`) : selectedStation?.name}
     >
-      {isALS ? <ALSDashboard /> : <StationDashboard station={selectedStation} />}
+      {isGlobal ? <ALSDashboard /> : <StationDashboard station={selectedStation} />}
     </Layout>
   );
 }

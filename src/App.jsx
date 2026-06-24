@@ -95,7 +95,7 @@ export default function App() {
         <Route
           path="/approvals"
           element={
-            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS]}>
+            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
               <Approvals />
             </ProtectedRoute>
           }
@@ -113,7 +113,7 @@ export default function App() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS]}>
+            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
               <Reports />
             </ProtectedRoute>
           }

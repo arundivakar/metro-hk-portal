@@ -41,9 +41,9 @@ export default function AssetLifecycle() {
   const allowedStations = ALS_GROUPS[alsGroupFilter];
 
   const stageCounts = {
-    in_use: assets.reduce((sum, a) => sum + (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_in_use || 0) : 0), 0),
-    partially_damaged: assets.reduce((sum, a) => sum + (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_damaged || 0) : 0), 0),
-    disposed: assets.reduce((sum, a) => sum + (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_disposed || 0) : 0), 0),
+    in_use: assets.reduce((sum, a) => sum + ((role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_in_use || 0) : 0), 0),
+    partially_damaged: assets.reduce((sum, a) => sum + ((role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_damaged || 0) : 0), 0),
+    disposed: assets.reduce((sum, a) => sum + ((role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_disposed || 0) : 0), 0),
   };
 
   useEffect(() => { 
@@ -63,7 +63,7 @@ export default function AssetLifecycle() {
         .eq('inventory_items.category', 'Consumable')
         .order('last_updated', { ascending: false });
 
-      if (role !== ROLES.ALS && selectedStation?.id) {
+      if ((role !== ROLES.ALS && role !== ROLES.HKTL) && selectedStation?.id) {
         query = query.eq('station_id', selectedStation.id);
       }
 
@@ -71,7 +71,7 @@ export default function AssetLifecycle() {
       if (err) throw err;
       setAssets(data ?? []);
 
-      if (role === ROLES.ALS) {
+      if ((role === ROLES.ALS || role === ROLES.HKTL)) {
         const { data: stationsData } = await supabase.from('stations').select('id,code,name').eq('is_active', true).order('code');
         setStations(stationsData ?? []);
       }
@@ -94,7 +94,7 @@ export default function AssetLifecycle() {
         `)
         .order('created_at', { ascending: false });
 
-      if (role !== ROLES.ALS && selectedStation?.id) {
+      if ((role !== ROLES.ALS && role !== ROLES.HKTL) && selectedStation?.id) {
         query = query.eq('station_id', selectedStation.id);
       }
 
@@ -219,16 +219,16 @@ export default function AssetLifecycle() {
       (statusFilter === ASSET_STATUS.PARTIALLY_DAMAGED && a.quantity_damaged > 0) ||
       (statusFilter === ASSET_STATUS.DISPOSED && a.quantity_disposed > 0)
     )
-    .filter((a) => role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))
-    .filter((a) => role !== ROLES.ALS || alsStation === 'All' || a.stations?.code === alsStation);
+    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code))
+    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || alsStation === 'All' || a.stations?.code === alsStation);
 
   const filteredHistory = historyLogs
-    .filter((a) => role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))
-    .filter((a) => role !== ROLES.ALS || alsStation === 'All' || a.stations?.code === alsStation);
+    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code))
+    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || alsStation === 'All' || a.stations?.code === alsStation);
 
   const assetColumns = [
     { key: 'sl_no', label: 'Sl. No', render: (_, __, i) => <span style={{ color: 'var(--color-gray-500)' }}>{i + 1}</span> },
-    ...(role === ROLES.ALS ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
+    ...((role === ROLES.ALS || role === ROLES.HKTL) ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
     { key: 'item', label: 'Consumable Material', render: (_, r) => <strong>{r.inventory_items?.name ?? '—'}</strong> },
     { key: 'brand', label: 'Brand', render: (_, r) => r.inventory_items?.rate_master?.brand || '—' },
     { key: 'supplier', label: 'Supplier', render: () => 'Tricuesta' },
@@ -258,7 +258,7 @@ export default function AssetLifecycle() {
 
   const historyColumns = [
     { key: 'created_at', label: 'Date', render: (v) => new Date(v).toLocaleDateString('en-IN') },
-    ...(role === ROLES.ALS ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
+    ...((role === ROLES.ALS || role === ROLES.HKTL) ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
     { key: 'item', label: 'Cleaning Material', render: (_, r) => r.inventory_items?.name ?? '—' },
     { key: 'quantity', label: 'Quantity', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
     { key: 'from_status', label: 'Initial Status', render: (v) => v === 'Stock' ? <span className="badge" style={{ background: 'var(--color-primary-100)', color: 'var(--color-primary-700)' }}>Stock</span> : <AssetStatusBadge status={v} /> },
@@ -269,7 +269,7 @@ export default function AssetLifecycle() {
       key: 'actions', 
       label: 'Actions', 
       render: (_, row) => {
-        const canEdit = role === ROLES.ALS || (role === ROLES.SC && row.station_id === selectedStation?.id);
+        const canEdit = (role === ROLES.ALS || role === ROLES.HKTL) || (role === ROLES.SC && row.station_id === selectedStation?.id);
         if (!canEdit) return null;
         return (
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -288,7 +288,7 @@ export default function AssetLifecycle() {
   return (
     <Layout
       title="Asset Lifecycle"
-      subtitle={role === ROLES.ALS ? 'All stations' : selectedStation?.name}
+      subtitle={(role === ROLES.ALS || role === ROLES.HKTL) ? 'All stations' : selectedStation?.name}
     >
       {/* Lifecycle Stage Summary */}
       <div className="lifecycle-stages animate-fade-in" style={{ marginBottom: 'var(--space-6)' }}>
@@ -347,7 +347,7 @@ export default function AssetLifecycle() {
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
-            {role === ROLES.ALS && (
+            {(role === ROLES.ALS || role === ROLES.HKTL) && (
               <select className="form-control" style={{ width: 'auto' }} value={alsStation} onChange={(e) => setAlsStation(e.target.value)}>
                 <option value="All">All Stations</option>
                 {stations.filter(s => !allowedStations || allowedStations.includes(s.code)).map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
@@ -372,7 +372,7 @@ export default function AssetLifecycle() {
       {activeTab === 'history' && (
         <Card>
           <div className="filter-bar" style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-4) var(--space-4) 0' }}>
-            {role === ROLES.ALS && (
+            {(role === ROLES.ALS || role === ROLES.HKTL) && (
               <select className="form-control" style={{ width: 'auto' }} value={alsStation} onChange={(e) => setAlsStation(e.target.value)}>
                 <option value="All">All Stations</option>
                 {stations.filter(s => !allowedStations || allowedStations.includes(s.code)).map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
