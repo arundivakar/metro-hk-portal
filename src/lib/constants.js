@@ -1,13 +1,15 @@
 // ─── Roles ───────────────────────────────────────────────────────────────────
 export const ROLES = {
-  HKS: 'HKS', // House Keeping Supervisor
-  SC: 'SC',   // Station Controller
-  ALS: 'ALS', // Assistant Line Supervisor
+  HKS: 'HKS',   // House Keeping Supervisor
+  HKTL: 'HKTL', // House Keeping Team Lead
+  SC: 'SC',     // Station Controller
+  ALS: 'ALS',   // Assistant Line Supervisor
 };
 
 // ─── Request Status ───────────────────────────────────────────────────────────
 export const REQUEST_STATUS = {
   PENDING: 'pending',
+  FORWARDED_SC: 'forwarded_sc',
   APPROVED_SC: 'approved_sc',
   FORWARDED_ALS: 'forwarded_als',
   APPROVED_ALS: 'approved_als',
@@ -17,6 +19,7 @@ export const REQUEST_STATUS = {
 
 export const REQUEST_STATUS_LABELS = {
   pending: 'Pending',
+  forwarded_sc: 'Forwarded to SC',
   approved_sc: 'Approved by SC',
   forwarded_als: 'Forwarded to ALS',
   approved_als: 'Approved by ALS',
@@ -26,6 +29,7 @@ export const REQUEST_STATUS_LABELS = {
 
 export const REQUEST_STATUS_COLORS = {
   pending: 'warning',
+  forwarded_sc: 'info',
   approved_sc: 'success',
   forwarded_als: 'info',
   approved_als: 'success',
@@ -84,6 +88,14 @@ export const NAV_ITEMS = {
     { path: '/inventory', label: 'Inventory', icon: 'Package' },
     { path: '/requests', label: 'My Requests', icon: 'ClipboardList' },
     { path: '/assets', label: 'Asset Status', icon: 'Boxes' },
+  ],
+  [ROLES.HKTL]: [
+    { path: '/dashboard', label: 'HKTL Dashboard', icon: 'LayoutDashboard' },
+    { path: '/inventory', label: 'All Inventory', icon: 'Package' },
+    { path: '/requests', label: 'All Requests', icon: 'ClipboardList' },
+    { path: '/approvals', label: 'Approvals', icon: 'CheckSquare' },
+    { path: '/assets', label: 'Asset Status', icon: 'Boxes' },
+    { path: '/reports', label: 'Reports', icon: 'BarChart2' },
   ],
   [ROLES.SC]: [
     { path: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },

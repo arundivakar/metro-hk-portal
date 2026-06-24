@@ -206,6 +206,7 @@ function ALSDashboard() {
   const { alsGroupFilter } = useStationStore();
   const [stations, setStations] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [damagedItems, setDamagedItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -250,10 +251,28 @@ function ALSDashboard() {
         query = query.eq('id', '00000000-0000-0000-0000-000000000000'); 
       }
 
-      const pendingRes = await query;
+      // 3. Fetch Damaged/Disposed items for analytics
+      let damageQuery = supabase.from('consumable_assets')
+        .select('item_id, quantity, inventory_items(name, unit)')
+        .eq('status', 'disposed');
+        
+      if (allowedStations && stationIds.length > 0) {
+        damageQuery = damageQuery.in('station_id', stationIds);
+      }
+      const { data: damageData } = await damageQuery;
+
+      const damageMap = {};
+      (damageData || []).forEach(d => {
+        if (!damageMap[d.item_id]) {
+          damageMap[d.item_id] = { name: d.inventory_items?.name, unit: d.inventory_items?.unit, total: 0 };
+        }
+        damageMap[d.item_id].total += Number(d.quantity);
+      });
+      const topDamaged = Object.values(damageMap).sort((a, b) => b.total - a.total).slice(0, 5);
 
       setStations(filteredStations);
       setPendingApprovals(pendingRes.count ?? 0);
+      setDamagedItems(topDamaged);
     } catch (err) {
       console.error('ALS dashboard error:', err);
     } finally {
@@ -332,33 +351,54 @@ function ALSDashboard() {
         />
       </div>
 
-      <Card>
-        <CardHeader title="All Stations Overview" icon={<Building2 size={16} />} />
-        <CardBody style={{ padding: 'var(--space-5)' }}>
-          {isLoading ? (
-            <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>Loading…</div>
-          ) : (
-            <div className="als-stations-grid">
-              {stations.map((s) => (
-                <div 
-                  key={s.id} 
-                  className="als-station-chip" 
-                  style={{ cursor: 'pointer', transition: 'transform 0.1s' }}
-                  onClick={() => setSelectedStationDetail(s)}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                >
-                  <div className="als-station-code">{s.code}</div>
-                  <div className="als-station-name">{s.name}</div>
-                  <div className="als-station-stats">
-                    <Badge variant="primary">View Details</Badge>
+      <div className="two-col-grid" style={{ marginBottom: 'var(--space-6)' }}>
+        <Card>
+          <CardHeader title="All Stations Overview" icon={<Building2 size={16} />} />
+          <CardBody style={{ padding: 'var(--space-5)' }}>
+            {isLoading ? (
+              <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>Loading…</div>
+            ) : (
+              <div className="als-stations-grid">
+                {stations.map((s) => (
+                  <div 
+                    key={s.id} 
+                    className="als-station-chip" 
+                    style={{ cursor: 'pointer', transition: 'transform 0.1s' }}
+                    onClick={() => setSelectedStationDetail(s)}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                  >
+                    <div className="als-station-code">{s.code}</div>
+                    <div className="als-station-name">{s.name}</div>
+                    <div className="als-station-stats">
+                      <Badge variant="primary">View Details</Badge>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardBody>
-      </Card>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader 
+            title="High Replacement Risk (Frequently Damaged)" 
+            icon={<AlertTriangle size={16} style={{ color: 'var(--color-danger-500)' }} />} 
+          />
+          <CardBody style={{ padding: 0 }}>
+            <DataTable
+              columns={[
+                { key: 'name', label: 'Item Name' },
+                { key: 'total', label: 'Total Units Damaged/Disposed', render: (v, r) => <span style={{ color: 'var(--color-danger-600)', fontWeight: 600 }}>{v} {r.unit}</span> },
+              ]}
+              data={damagedItems.map((d, i) => ({ ...d, id: i }))}
+              isLoading={isLoading}
+              emptyTitle="No damaged items recorded"
+              emptyDesc="No items have been marked as disposed/damaged in this group."
+            />
+          </CardBody>
+        </Card>
+      </div>
 
       <Modal
         isOpen={!!selectedStationDetail}

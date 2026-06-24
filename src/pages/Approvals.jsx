@@ -24,6 +24,7 @@ export default function Approvals() {
   const [comments, setComments] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [scVerified, setScVerified] = useState(false);
 
   useEffect(() => { loadRequests(); }, [selectedStation?.id, role, alsGroupFilter]); // eslint-disable-line
 
@@ -40,10 +41,13 @@ export default function Approvals() {
         .order('created_at', { ascending: false });
 
       if (role === ROLES.SC) {
-        // SC sees pending requests for their station (those not yet forwarded)
+        // SC sees forwarded_sc requests for their station
         query = query
           .eq('station_id', selectedStation?.id)
-          .in('status', [REQUEST_STATUS.PENDING]);
+          .in('status', [REQUEST_STATUS.FORWARDED_SC]);
+      } else if (role === ROLES.HKTL) {
+        // HKTL sees pending requests globally
+        query = query.in('status', [REQUEST_STATUS.PENDING]);
       } else if (role === ROLES.ALS) {
         // ALS sees forwarded requests
         query = query.in('status', [REQUEST_STATUS.FORWARDED_ALS]);
@@ -82,6 +86,7 @@ export default function Approvals() {
     setSelected(req);
     setAction(act);
     setComments('');
+    setScVerified(false);
     setError('');
   };
 
@@ -92,7 +97,9 @@ export default function Approvals() {
     try {
       let newStatus = '';
       if (action === 'approved') {
-        newStatus = role === ROLES.SC ? REQUEST_STATUS.APPROVED_SC : REQUEST_STATUS.APPROVED_ALS;
+        if (role === ROLES.HKTL) newStatus = REQUEST_STATUS.FORWARDED_SC;
+        else if (role === ROLES.SC) newStatus = REQUEST_STATUS.APPROVED_SC;
+        else newStatus = REQUEST_STATUS.APPROVED_ALS;
       } else if (action === 'rejected') {
         newStatus = REQUEST_STATUS.REJECTED;
       } else if (action === 'forwarded') {
@@ -147,8 +154,19 @@ export default function Approvals() {
       key: 'actions', label: 'Actions',
       render: (_, r) => (
         <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
+          {/* HKTL actions */}
+          {role === ROLES.HKTL && r.status === REQUEST_STATUS.PENDING && (
+            <>
+              <Button variant="success" size="sm" leftIcon={<Check size={12} />} onClick={() => openAction(r, 'approved')}>
+                Approve (to SC)
+              </Button>
+              <Button variant="danger" size="sm" leftIcon={<X size={12} />} onClick={() => openAction(r, 'rejected')}>
+                Reject
+              </Button>
+            </>
+          )}
           {/* SC actions */}
-          {role === ROLES.SC && r.status === REQUEST_STATUS.PENDING && (
+          {role === ROLES.SC && r.status === REQUEST_STATUS.FORWARDED_SC && (
             <>
               <Button variant="success" size="sm" leftIcon={<Check size={12} />} onClick={() => openAction(r, 'approved')}>
                 Approve
@@ -183,13 +201,15 @@ export default function Approvals() {
     },
   ];
 
-  const pageTitle = role === ROLES.SC ? 'Pending Approvals' : 'Forwarded Requests';
-  const pageSubtitle = role === ROLES.SC
-    ? `${requests.length} request${requests.length !== 1 ? 's' : ''} pending your action`
-    : `${requests.length} request${requests.length !== 1 ? 's' : ''} forwarded to ALS`;
+  let pageTitle = 'Approvals';
+  if (role === ROLES.SC) pageTitle = 'Pending SC Approvals';
+  if (role === ROLES.HKTL) pageTitle = 'Pending HKTL Approvals';
+  if (role === ROLES.ALS) pageTitle = 'Forwarded Requests';
+
+  const pageSubtitle = `${requests.length} request${requests.length !== 1 ? 's' : ''} pending your action`;
 
   const actionLabels = {
-    approved: { label: 'Approve', variant: 'success' },
+    approved: { label: role === ROLES.HKTL ? 'Approve & Forward' : 'Approve', variant: 'success' },
     rejected: { label: 'Reject', variant: 'danger' },
     forwarded: { label: 'Forward to ALS', variant: 'warning' },
     completed: { label: 'Mark as Completed', variant: 'accent' },
@@ -222,6 +242,7 @@ export default function Approvals() {
               variant={actionLabels[action]?.variant ?? 'primary'}
               isLoading={submitting}
               onClick={handleAction}
+              disabled={role === ROLES.SC && (action === 'approved' || action === 'forwarded') && !scVerified}
             >
               {actionLabels[action]?.label ?? 'Confirm'}
             </Button>
@@ -243,6 +264,17 @@ export default function Approvals() {
                 Marking as completed will deduct {selected.quantity} {selected.inventory_items?.unit} from station inventory.
               </Alert>
             )}
+            
+            {/* SC Physical Verification Checklist */}
+            {role === ROLES.SC && (action === 'approved' || action === 'forwarded') && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3)', background: 'var(--color-primary-50)', border: '1px solid var(--color-primary-200)', borderRadius: 'var(--radius-md)', cursor: 'pointer', marginBottom: 'var(--space-4)' }}>
+                <input type="checkbox" checked={scVerified} onChange={(e) => setScVerified(e.target.checked)} disabled={submitting} />
+                <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--color-primary-900)' }}>
+                  Verified the current condition of the consumable, found actual requirement is needed.
+                </span>
+              </label>
+            )}
+
             <div className="form-group">
               <label className="form-label" htmlFor="approval-comments">Comments (optional)</label>
               <textarea
