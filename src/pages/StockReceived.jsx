@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PackagePlus, Plus, X } from 'lucide-react';
+import { PackagePlus, Plus, Pencil, Trash2 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -25,10 +25,13 @@ export default function StockReceived() {
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [showBulkForm, setShowBulkForm] = useState(false);
   const [showNewItemForm, setShowNewItemForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Editing state
+  const [editingLog, setEditingLog] = useState(null);
+  const [editForm, setEditForm] = useState({ quantity: '', received_date: '', remarks: '' });
 
   // ALS station filter
   const [stations, setStations] = useState([]);
@@ -50,8 +53,6 @@ export default function StockReceived() {
     item_name: '', category: 'Consumable', unit: 'Nos', unit_rate: '', tender_year: '', brand: '', remarks: ''
   });
 
-  const [bulkForm, setBulkForm] = useState({}); // { [item_id]: quantity_string }
-
   useEffect(() => {
     loadData();
   }, [selectedStation?.id, role]); // eslint-disable-line
@@ -66,6 +67,7 @@ export default function StockReceived() {
         const [logsRes, stationsRes] = await Promise.all([
           supabase.from('stock_received')
             .select('*, inventory_items(name,unit), stations(code,name), users_profile(full_name)')
+            .neq('supplier', 'Opening Stock Initialization')
             .order('received_date', { ascending: false }).limit(200),
           supabase.from('stations').select('id,code,name').eq('is_active', true).order('code'),
         ]);
@@ -138,45 +140,47 @@ export default function StockReceived() {
     }
   };
 
-  const handleBulkSubmit = async (e) => {
-    e.preventDefault();
+  const handleEdit = (log) => {
+    setEditingLog(log);
+    setEditForm({
+      quantity: log.quantity,
+      received_date: log.received_date,
+      remarks: log.remarks || ''
+    });
     setError('');
-    
-    // Filter out empty/zero entries
-    const entriesToSubmit = Object.entries(bulkForm)
-      .filter(([itemId, qty]) => qty && parseFloat(qty) > 0)
-      .map(([itemId, qty]) => {
-        const item = items.find(i => i.id === itemId);
-        return {
-          station_id: selectedStation.id,
-          item_id: itemId,
-          quantity: parseFloat(qty),
-          received_date: today,
-          invoice_number: null,
-          source_station_id: null,
-          supplier: 'Opening Stock Initialization',
-          unit_rate: item?.rate_master?.unit_rate ? parseFloat(item.rate_master.unit_rate) : null,
-          remarks: 'Opening Stock Initialization via Bulk Entry',
-          received_by: profile.id,
-        };
-      });
+  };
 
-    if (entriesToSubmit.length === 0) {
-      setError('Please enter quantities for at least one item.');
-      return;
-    }
-
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
     setSubmitting(true);
+    setError('');
     try {
-      await bulkAddStockReceived(entriesToSubmit);
-      toast.success(`Successfully initialized stock for ${entriesToSubmit.length} items!`);
-      setShowBulkForm(false);
-      setBulkForm({});
+      const { error: err } = await supabase.rpc('fn_edit_stock_received', {
+        p_log_id: editingLog.id,
+        p_new_quantity: parseFloat(editForm.quantity),
+        p_new_date: editForm.received_date,
+        p_remarks: editForm.remarks || null
+      });
+      if (err) throw err;
+      toast.success('Stock received log updated!');
+      setEditingLog(null);
       loadData();
     } catch (err) {
-      setError('Failed to bulk initialize stock: ' + err.message);
+      setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (log) => {
+    if (!window.confirm('Are you sure you want to delete this log? Physical stock will be deducted accordingly.')) return;
+    try {
+      const { error: err } = await supabase.rpc('fn_delete_stock_received', { p_log_id: log.id });
+      if (err) throw err;
+      toast.success('Log deleted successfully.');
+      loadData();
+    } catch (err) {
+      toast.error('Failed to delete: ' + err.message);
     }
   };
 
@@ -205,6 +209,25 @@ export default function StockReceived() {
     }},
     { key: 'invoice_number', label: 'Invoice #', render: (v) => v ?? '—' },
     { key: 'received_by', label: 'Received By', render: (_, row) => row.users_profile?.full_name ?? '—' },
+    { 
+      key: 'actions', 
+      label: 'Actions', 
+      render: (_, row) => {
+        // Can only edit if ALS or if SC owns the log
+        const canEdit = role === ROLES.ALS || (role === ROLES.SC && row.station_id === selectedStation?.id);
+        if (!canEdit) return null;
+        return (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-primary-600)' }} onClick={() => handleEdit(row)} title="Edit">
+              <Pencil size={16} />
+            </button>
+            <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-danger-600)' }} onClick={() => handleDelete(row)} title="Delete">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        );
+      }
+    }
   ];
 
   const tableData = displayLogs.map((r) => ({ ...r, id: r.id }));
@@ -221,14 +244,9 @@ export default function StockReceived() {
             </Button>
           )}
           {role === ROLES.SC && (
-            <>
-              <Button variant="outline" leftIcon={<PackagePlus size={16} />} onClick={() => setShowBulkForm(true)}>
-                Initialize Opening Stock
-              </Button>
-              <Button variant="accent" leftIcon={<PackagePlus size={16} />} onClick={() => setShowForm(true)}>
-                Receive Stock
-              </Button>
-            </>
+            <Button variant="accent" leftIcon={<PackagePlus size={16} />} onClick={() => setShowForm(true)}>
+              Receive Stock
+            </Button>
           )}
         </div>
       }
@@ -253,68 +271,6 @@ export default function StockReceived() {
           emptyIcon={<PackagePlus size={28} />}
         />
       </Card>
-
-      {/* Bulk Entry Opening Stock Modal */}
-      {role === ROLES.SC && (
-      <Modal
-        isOpen={showBulkForm}
-        onClose={() => { setShowBulkForm(false); setError(''); }}
-        title="Initialize Opening Stock (Bulk Entry)"
-        size="lg"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setShowBulkForm(false)}>Cancel</Button>
-            <Button variant="accent" form="bulk-stock-form" type="submit" isLoading={submitting}>
-              Save All Opening Stock
-            </Button>
-          </>
-        }
-      >
-        <Alert variant="info" style={{ marginBottom: 'var(--space-4)' }}>
-          Enter the current quantities you have on-hand for any items. Leave the field blank for items you don't have.
-        </Alert>
-        {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
-        
-        <form id="bulk-stock-form" onSubmit={handleBulkSubmit}>
-          <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '8px' }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40%' }}>Item Name</th>
-                  <th>Category</th>
-                  <th style={{ width: '150px' }}>Quantity</th>
-                  <th>Unit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <strong>{item.name}</strong>
-                      {item.rate_master?.tender_year && <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Tender: {item.rate_master.tender_year}</div>}
-                    </td>
-                    <td>{item.category}</td>
-                    <td>
-                      <input 
-                        type="number" 
-                        min="0" 
-                        step="any" 
-                        className="form-control"
-                        placeholder="0"
-                        value={bulkForm[item.id] || ''}
-                        onChange={(e) => setBulkForm({ ...bulkForm, [item.id]: e.target.value })}
-                        style={{ padding: '6px', height: '32px' }}
-                      />
-                    </td>
-                    <td>{item.unit}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </form>
-      </Modal>
-      )}
 
       {/* Add Stock Received Modal */}
       {role === ROLES.SC && (
@@ -485,6 +441,47 @@ export default function StockReceived() {
         </form>
       </Modal>
       )}
+
+      {/* Edit Log Modal */}
+      <Modal
+        isOpen={!!editingLog}
+        onClose={() => setEditingLog(null)}
+        title="Edit Stock Received Log"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditingLog(null)}>Cancel</Button>
+            <Button variant="accent" form="edit-log-form" type="submit" isLoading={submitting}>
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        {editingLog && (
+          <form id="edit-log-form" onSubmit={handleSaveEdit}>
+            {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
+            <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)' }}>
+              <p><strong>Item:</strong> {editingLog.inventory_items?.name}</p>
+              <p><strong>Original Quantity:</strong> {editingLog.quantity}</p>
+            </div>
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="el-qty">New Quantity</label>
+              <input id="el-qty" type="number" min="0.001" step="any" className="form-control"
+                value={editForm.quantity} onChange={(e) => setEditForm(f => ({ ...f, quantity: e.target.value }))} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="el-date">Received Date</label>
+              <input id="el-date" type="date" className="form-control"
+                value={editForm.received_date} onChange={(e) => setEditForm(f => ({ ...f, received_date: e.target.value }))} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="el-remarks">Remarks</label>
+              <textarea id="el-remarks" className="form-control" rows={2}
+                value={editForm.remarks} onChange={(e) => setEditForm(f => ({ ...f, remarks: e.target.value }))} />
+            </div>
+          </form>
+        )}
+      </Modal>
     </Layout>
   );
 }

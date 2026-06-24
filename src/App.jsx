@@ -12,7 +12,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import StockReceived from './pages/StockReceived';
-import Consumption from './pages/Consumption';
+import StockMovement from './pages/StockMovement';
 import Requests from './pages/Requests';
 import Approvals from './pages/Approvals';
 import AssetLifecycle from './pages/AssetLifecycle';
@@ -75,10 +75,10 @@ export default function App() {
         />
 
         <Route
-          path="/consumption"
+          path="/stock-movement"
           element={
-            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS]}>
-              <Consumption />
+            <ProtectedRoute allowedRoles={[ROLES.ALS, ROLES.SC]}>
+              <StockMovement />
             </ProtectedRoute>
           }
         />

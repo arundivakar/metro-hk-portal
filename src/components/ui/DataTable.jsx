@@ -80,7 +80,7 @@ export default function DataTable({
           </tr>
         </thead>
         <tbody>
-          {sortedData.map((row) => (
+          {sortedData.map((row, rowIndex) => (
             <tr
               key={row[rowKey]}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -93,7 +93,7 @@ export default function DataTable({
                   style={{ textAlign: col.align ?? 'left' }}
                   className={col.key === 'actions' ? 'col-actions' : ''}
                 >
-                  {col.render ? col.render(row[col.key], row) : (row[col.key] ?? '—')}
+                  {col.render ? col.render(row[col.key], row, rowIndex) : (row[col.key] ?? '—')}
                 </td>
               ))}
             </tr>

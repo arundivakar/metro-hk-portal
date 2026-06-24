@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 /**
@@ -39,7 +40,7 @@ export default function Modal({ isOpen, onClose, title, size = 'md', children, f
 
   const sizeClass = size === 'lg' ? 'modal-lg' : size === 'sm' ? 'modal-sm' : '';
 
-  return (
+  return createPortal(
     <div className="modal-backdrop" ref={backdropRef} onClick={handleBackdropClick}>
       <div className={`modal ${sizeClass}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
@@ -51,6 +52,7 @@ export default function Modal({ isOpen, onClose, title, size = 'md', children, f
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

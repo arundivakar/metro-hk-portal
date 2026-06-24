@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Boxes, Plus, ChevronRight, History, PackagePlus } from 'lucide-react';
+import { Boxes, Plus, ChevronRight, History, PackagePlus, Pencil, Trash2 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -20,7 +20,6 @@ export default function AssetLifecycle() {
   const [activeTab, setActiveTab] = useState('assets'); // 'assets' or 'history'
   const [assets, setAssets] = useState([]);
   const [historyLogs, setHistoryLogs] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Status Update Modal
@@ -28,6 +27,10 @@ export default function AssetLifecycle() {
   const [newStatus, setNewStatus] = useState('');
   const [updateQty, setUpdateQty] = useState('');
   const [remarks, setRemarks] = useState('');
+
+  // Editing History state
+  const [editingLog, setEditingLog] = useState(null);
+  const [editLogForm, setEditLogForm] = useState({ quantity: '', remarks: '' });
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -38,9 +41,9 @@ export default function AssetLifecycle() {
   const allowedStations = ALS_GROUPS[alsGroupFilter];
 
   const stageCounts = {
-    in_use: assets.filter((a) => a.status === ASSET_STATUS.IN_USE && (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))).length,
-    partially_damaged: assets.filter((a) => a.status === ASSET_STATUS.PARTIALLY_DAMAGED && (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))).length,
-    disposed: assets.filter((a) => a.status === ASSET_STATUS.DISPOSED && (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))).length,
+    in_use: assets.reduce((sum, a) => sum + (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_in_use || 0) : 0), 0),
+    partially_damaged: assets.reduce((sum, a) => sum + (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_damaged || 0) : 0), 0),
+    disposed: assets.reduce((sum, a) => sum + (role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_disposed || 0) : 0), 0),
   };
 
   useEffect(() => { 
@@ -51,14 +54,14 @@ export default function AssetLifecycle() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      let query = supabase.from('consumable_assets')
+      let query = supabase.from('station_inventory')
         .select(`
           *,
-          inventory_items ( name, unit, category ),
-          stations ( code, name ),
-          users_profile!consumable_assets_updated_by_fkey ( full_name )
+          inventory_items!inner ( name, unit, category, rate_master(brand, tender_year) ),
+          stations ( code, name )
         `)
-        .order('created_at', { ascending: false });
+        .eq('inventory_items.category', 'Consumable')
+        .order('last_updated', { ascending: false });
 
       if (role !== ROLES.ALS && selectedStation?.id) {
         query = query.eq('station_id', selectedStation.id);
@@ -115,17 +118,25 @@ export default function AssetLifecycle() {
   const handleStatusUpdate = async () => {
     if (!selected || !newStatus || !updateQty) return;
     const qty = parseFloat(updateQty);
-    if (qty <= 0 || qty > selected.quantity) {
-      setError('Invalid quantity. Must be between 0.1 and ' + selected.quantity);
+    
+    // Determine max available based on current status we are transitioning FROM
+    // We are adding a 'fromStatus' state later, for now let's assume we derive it from selected 'newStatus'
+    // To move to Damaged, it must come from Good. To move to Disposed, it can come from Good or Damaged.
+    // Let's rely on the RPC function to validate it.
+
+    if (qty <= 0) {
+      setError('Invalid quantity.');
       return;
     }
 
     setSubmitting(true);
     setError('');
     try {
-      const { error: err } = await supabase.rpc('fn_update_asset_status_split', {
-        p_asset_id: selected.id,
-        p_new_status: newStatus,
+      const { error: err } = await supabase.rpc('fn_transition_asset_bucket', {
+        p_station_id: selected.station_id,
+        p_item_id: selected.item_id,
+        p_from_status: selected.transitionFrom, // We will set this in the UI
+        p_to_status: newStatus,
         p_quantity: qty,
         p_remarks: remarks || null,
         p_user_id: profile.id
@@ -136,7 +147,7 @@ export default function AssetLifecycle() {
       setSelected(null);
       loadData();
     } catch (err) {
-      setError(err.message.includes('function fn_update_asset_status_split') 
+      setError(err.message.includes('function fn_transition_asset_bucket') 
         ? 'Database update required. Please run the SQL script provided.' 
         : err.message);
     } finally {
@@ -144,14 +155,70 @@ export default function AssetLifecycle() {
     }
   };
 
-  const getNextStatuses = (currentStatus) => {
-    if (currentStatus === ASSET_STATUS.IN_USE) return [ASSET_STATUS.PARTIALLY_DAMAGED, ASSET_STATUS.DISPOSED];
-    if (currentStatus === ASSET_STATUS.PARTIALLY_DAMAGED) return [ASSET_STATUS.DISPOSED];
+  const handleEditLog = (log) => {
+    setEditingLog(log);
+    setEditLogForm({
+      quantity: log.quantity,
+      remarks: log.remarks || ''
+    });
+    setError('');
+  };
+
+  const handleSaveEditLog = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      const { error: err } = await supabase.rpc('fn_edit_asset_log', {
+        p_log_id: editingLog.id,
+        p_new_quantity: parseFloat(editLogForm.quantity),
+        p_remarks: editLogForm.remarks || null
+      });
+      if (err) throw err;
+      toast.success('Transition log updated!');
+      setEditingLog(null);
+      loadHistory();
+      loadData(); // Update the main buckets
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteLog = async (log) => {
+    if (!window.confirm('Are you sure you want to delete this transition? Inventory buckets will be restored to their previous states.')) return;
+    try {
+      const { error: err } = await supabase.rpc('fn_delete_asset_log', { p_log_id: log.id });
+      if (err) throw err;
+      toast.success('Transition deleted successfully.');
+      loadHistory();
+      loadData();
+    } catch (err) {
+      toast.error('Failed to delete: ' + err.message);
+    }
+  };
+
+  const getAvailableFromStatuses = (row) => {
+    const froms = [];
+    if (row.quantity_in_use > 0) froms.push(ASSET_STATUS.IN_USE);
+    if (row.quantity_damaged > 0) froms.push(ASSET_STATUS.PARTIALLY_DAMAGED);
+    return froms;
+  };
+
+  const getNextStatuses = (fromStatus) => {
+    if (fromStatus === ASSET_STATUS.IN_USE) return [ASSET_STATUS.PARTIALLY_DAMAGED, ASSET_STATUS.DISPOSED];
+    if (fromStatus === ASSET_STATUS.PARTIALLY_DAMAGED) return [ASSET_STATUS.DISPOSED];
     return [];
   };
 
   const filteredAssets = assets
-    .filter((a) => statusFilter === 'All' || a.status === statusFilter)
+    // Since we now show rows containing all statuses, the filter just filters rows where AT LEAST ONE matches
+    .filter((a) => statusFilter === 'All' || 
+      (statusFilter === ASSET_STATUS.IN_USE && a.quantity_in_use > 0) ||
+      (statusFilter === ASSET_STATUS.PARTIALLY_DAMAGED && a.quantity_damaged > 0) ||
+      (statusFilter === ASSET_STATUS.DISPOSED && a.quantity_disposed > 0)
+    )
     .filter((a) => role !== ROLES.ALS || !allowedStations || allowedStations.includes(a.stations?.code))
     .filter((a) => role !== ROLES.ALS || alsStation === 'All' || a.stations?.code === alsStation);
 
@@ -160,27 +227,29 @@ export default function AssetLifecycle() {
     .filter((a) => role !== ROLES.ALS || alsStation === 'All' || a.stations?.code === alsStation);
 
   const assetColumns = [
+    { key: 'sl_no', label: 'Sl. No', render: (_, __, i) => <span style={{ color: 'var(--color-gray-500)' }}>{i + 1}</span> },
     ...(role === ROLES.ALS ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
-    { key: 'item', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },
-    { key: 'category', label: 'Category', render: (_, r) => r.inventory_items?.category ?? '—' },
-    { key: 'quantity', label: 'Quantity', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
-    { key: 'issued_date', label: 'Issued Date', sortable: true, render: (v) => v ? new Date(v).toLocaleDateString('en-IN') : '—' },
-    { key: 'status', label: 'Current Status', render: (v) => <AssetStatusBadge status={v} /> },
-    { key: 'updated_by', label: 'Updated By', render: (_, r) => r.users_profile?.full_name ?? '—' },
+    { key: 'item', label: 'Consumable Material', render: (_, r) => <strong>{r.inventory_items?.name ?? '—'}</strong> },
+    { key: 'brand', label: 'Brand', render: (_, r) => r.inventory_items?.rate_master?.brand || '—' },
+    { key: 'supplier', label: 'Supplier', render: () => 'Tricuesta' },
+    { key: 'tender_year', label: 'Tender Year', render: (_, r) => r.inventory_items?.rate_master?.tender_year || '—' },
+    { key: 'in_good_condition', label: 'In Good Condition (In Use)', render: (_, r) => `${Number(r.quantity_in_use || 0)} ${r.inventory_items?.unit ?? ''}` },
+    { key: 'partially_damaged', label: 'Partially Damaged (Usable)', render: (_, r) => `${Number(r.quantity_damaged || 0)} ${r.inventory_items?.unit ?? ''}` },
+    { key: 'disposed', label: 'Disposed (Unusable)', render: (_, r) => `${Number(r.quantity_disposed || 0)} ${r.inventory_items?.unit ?? ''}` },
     ...(role === ROLES.SC ? [{
       key: 'actions', label: 'Actions',
       render: (_, r) => {
-        const nextStatuses = getNextStatuses(r.status);
-        if (nextStatuses.length === 0) return <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--font-size-xs)' }}>Final Stage</span>;
+        const availableFroms = getAvailableFromStatuses(r);
+        if (availableFroms.length === 0) return <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--font-size-xs)' }}>No stock</span>;
         return (
           <Button variant="outline" size="sm" onClick={() => { 
-            setSelected(r); 
+            setSelected({ ...r, transitionFrom: availableFroms[0] }); 
             setNewStatus(''); 
-            setUpdateQty(r.quantity.toString()); 
+            setUpdateQty(''); 
             setRemarks(''); 
             setError(''); 
           }}>
-            Update Status
+            Transition
           </Button>
         );
       },
@@ -196,6 +265,24 @@ export default function AssetLifecycle() {
     { key: 'to_status', label: 'Current Status', render: (v) => <AssetStatusBadge status={v} /> },
     { key: 'remarks', label: 'Remarks', render: (v) => v || '—' },
     { key: 'logged_by', label: 'Logged By', render: (_, r) => r.users_profile?.full_name ?? '—' },
+    { 
+      key: 'actions', 
+      label: 'Actions', 
+      render: (_, row) => {
+        const canEdit = role === ROLES.ALS || (role === ROLES.SC && row.station_id === selectedStation?.id);
+        if (!canEdit) return null;
+        return (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-primary-600)' }} onClick={() => handleEditLog(row)} title="Edit">
+              <Pencil size={16} />
+            </button>
+            <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-danger-600)' }} onClick={() => handleDeleteLog(row)} title="Delete">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        );
+      }
+    }
   ];
 
   return (
@@ -240,7 +327,7 @@ export default function AssetLifecycle() {
           onClick={() => setActiveTab('assets')}
           style={{ borderRadius: 'var(--radius-md) var(--radius-md) 0 0', borderBottom: activeTab === 'assets' ? 'none' : '' }}
         >
-          <Boxes size={16} /> Assets In Use
+          <Boxes size={16} /> Asset Details (View)
         </button>
         <button 
           className={`btn ${activeTab === 'history' ? 'btn-primary' : 'btn-ghost'}`}
@@ -324,26 +411,38 @@ export default function AssetLifecycle() {
             {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
             <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)' }}>
               <p><strong>Item:</strong> {selected.inventory_items?.name}</p>
-              <p><strong>Current Status:</strong> <AssetStatusBadge status={selected.status} /></p>
-              <p><strong>Total Available in this Batch:</strong> {selected.quantity} {selected.inventory_items?.unit}</p>
+              <p>Good (In Use): {selected.quantity_in_use || 0} | Damaged: {selected.quantity_damaged || 0} | Disposed: {selected.quantity_disposed || 0}</p>
             </div>
             
             <div className="form-group">
-              <label className="form-label form-label-required" htmlFor="asset-qty">Quantity to Transition</label>
-              <input id="asset-qty" type="number" min="0.001" max={selected.quantity} step="any" className="form-control"
-                value={updateQty} onChange={(e) => setUpdateQty(e.target.value)} required />
-              <small style={{ color: 'var(--color-text-muted)' }}>You can split this batch by transitioning a partial quantity.</small>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label form-label-required" htmlFor="asset-new-status">New Status</label>
-              <select id="asset-new-status" className="form-control" value={newStatus} onChange={(e) => setNewStatus(e.target.value)} required>
-                <option value="">— Select new status —</option>
-                {getNextStatuses(selected.status).map((s) => (
+              <label className="form-label form-label-required" htmlFor="asset-from-status">Source Status (Moving From)</label>
+              <select id="asset-from-status" className="form-control" value={selected.transitionFrom} onChange={(e) => {
+                setSelected({...selected, transitionFrom: e.target.value});
+                setNewStatus('');
+              }} required>
+                {getAvailableFromStatuses(selected).map((s) => (
                   <option key={s} value={s}>{ASSET_STATUS_LABELS[s]}</option>
                 ))}
               </select>
             </div>
+
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="asset-new-status">Target Status (Moving To)</label>
+              <select id="asset-new-status" className="form-control" value={newStatus} onChange={(e) => setNewStatus(e.target.value)} required disabled={!selected.transitionFrom}>
+                <option value="">— Select Target Status —</option>
+                {getNextStatuses(selected.transitionFrom).map((s) => (
+                  <option key={s} value={s}>{ASSET_STATUS_LABELS[s]}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="asset-qty">Quantity to Transition</label>
+              <input id="asset-qty" type="number" min="0.001" step="any" className="form-control"
+                value={updateQty} onChange={(e) => setUpdateQty(e.target.value)} required />
+              <small style={{ color: 'var(--color-text-muted)' }}>Amount of items moving to {newStatus ? ASSET_STATUS_LABELS[newStatus] : 'the new state'}.</small>
+            </div>
+
             <div className="form-group">
               <label className="form-label" htmlFor="asset-remarks">Remarks</label>
               <textarea id="asset-remarks" className="form-control" rows={3}
@@ -351,6 +450,46 @@ export default function AssetLifecycle() {
                 placeholder="Describe the damage or reason for disposal…" />
             </div>
           </>
+        )}
+      </Modal>
+
+      {/* Edit Log Modal */}
+      <Modal
+        isOpen={!!editingLog}
+        onClose={() => setEditingLog(null)}
+        title="Edit Transition Log"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditingLog(null)}>Cancel</Button>
+            <Button variant="warning" form="edit-log-form" type="submit" isLoading={submitting}>
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        {editingLog && (
+          <form id="edit-log-form" onSubmit={handleSaveEditLog}>
+            {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
+            <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)' }}>
+              <p><strong>Item:</strong> {editingLog.inventory_items?.name}</p>
+              <p><strong>Transition:</strong> <AssetStatusBadge status={editingLog.from_status} /> &rarr; <AssetStatusBadge status={editingLog.to_status} /></p>
+              <p><strong>Original Quantity:</strong> {editingLog.quantity}</p>
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="el-qty">New Quantity</label>
+              <input id="el-qty" type="number" min="0.001" step="any" className="form-control"
+                value={editLogForm.quantity} onChange={(e) => setEditLogForm(f => ({ ...f, quantity: e.target.value }))} required />
+              <small style={{ color: 'var(--color-text-muted)' }}>Changing this will automatically adjust the stock buckets.</small>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="el-remarks">Remarks</label>
+              <textarea id="el-remarks" className="form-control" rows={2}
+                value={editLogForm.remarks} onChange={(e) => setEditLogForm(f => ({ ...f, remarks: e.target.value }))} />
+            </div>
+          </form>
         )}
       </Modal>
     </Layout>

@@ -36,13 +36,15 @@ function StationDashboard({ station }) {
 
       const [received, consumed, requests, recentStock, recentConsumption] = await Promise.all([
         supabase.from('stock_received').select('quantity', { count: 'exact', head: false })
-          .eq('station_id', sid).gte('received_date', monthStart),
+          .eq('station_id', sid).gte('received_date', monthStart)
+          .neq('supplier', 'Opening Stock Initialization'),
         supabase.from('consumption_logs').select('quantity_used', { count: 'exact', head: false })
           .eq('station_id', sid).gte('consumption_date', monthStart),
         supabase.from('consumable_requests').select('id', { count: 'exact', head: false })
           .eq('station_id', sid).in('status', ['pending', 'forwarded_als']),
         supabase.from('stock_received').select('*, inventory_items(name,unit)')
-          .eq('station_id', sid).order('created_at', { ascending: false }).limit(5),
+          .eq('station_id', sid).order('created_at', { ascending: false }).limit(5)
+          .neq('supplier', 'Opening Stock Initialization'),
         supabase.from('consumption_logs').select('*, inventory_items(name,unit)')
           .eq('station_id', sid).order('created_at', { ascending: false }).limit(5),
       ]);
@@ -224,9 +226,15 @@ function ALSDashboard() {
 
       if (stErr) throw stErr;
 
-      const filteredStations = stationsData.filter((s) => 
-        !allowedStations || allowedStations.includes(s.code)
-      );
+      const stationOrder = ['ALVA','PNCU','CPPY','AATK','MUTT','KLMT','CCUV','PDPM','EDAP','CGPP','PARV','JLSD','KALR','TNHL','MGRD','MACE','ERSH','KVTR','EMKM','VYTA','TKDM','PETT','VAKK','SNJN','TPHT'];
+
+      const filteredStations = stationsData
+        .filter((s) => !allowedStations || allowedStations.includes(s.code))
+        .sort((a, b) => {
+          const indexA = stationOrder.indexOf(a.code);
+          const indexB = stationOrder.indexOf(b.code);
+          return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+        });
 
       const stationIds = filteredStations.map((s) => s.id);
 

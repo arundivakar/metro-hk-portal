@@ -118,15 +118,16 @@
 }
 
 .station-card-code {
-  font-size: var(--font-size-lg);
-  font-weight: 700;
-  color: var(--color-primary-600);
-  font-family: 'Courier New', monospace;
+  font-size: var(--font-size-xl);
+  font-weight: 800;
+  color: var(--color-primary-700);
+  letter-spacing: 0.02em;
 }
 
 .station-card-name {
-  font-size: var(--font-size-xs);
-  color: var(--color-gray-500);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-gray-600);
   margin-top: var(--space-1);
   line-height: 1.3;
 }
@@ -206,16 +207,18 @@
 }
 
 .als-station-code {
-  font-size: var(--font-size-base);
-  font-weight: 700;
-  color: var(--color-primary-600);
-  font-family: 'Courier New', monospace;
+  font-size: var(--font-size-lg);
+  font-weight: 800;
+  color: var(--color-primary-700);
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
 }
 
 .als-station-name {
-  font-size: var(--font-size-xs);
-  color: var(--color-gray-500);
-  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-gray-600);
+  margin-bottom: var(--space-4);
 }
 
 .als-station-stats {
