@@ -40,8 +40,8 @@ export default function LoginForm({ onSuccess }) {
       <div className="login-card">
         {/* Logo */}
         <div className="login-logo">
-          <div className="login-logo-icon">
-            <Train size={28} />
+          <div className="login-logo-icon" style={{ background: 'transparent', padding: 0 }}>
+            <img src="/kmrl_logo.png" alt="KMRL Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
           </div>
           <div>
             <div className="login-logo-title">Metro HK Portal</div>

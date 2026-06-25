@@ -45,8 +45,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
       <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       {/* Brand */}
       <div className="sidebar-brand">
-        <div className="sidebar-brand-icon">
-          <Train size={18} />
+        <div className="sidebar-brand-icon" style={{ background: 'transparent', padding: 0 }}>
+          <img src="/kmrl_logo.png" alt="KMRL Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
         </div>
         {!collapsed && (
           <div className="sidebar-brand-text">

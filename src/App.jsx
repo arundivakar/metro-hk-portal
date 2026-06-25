@@ -18,6 +18,7 @@ import Approvals from './pages/Approvals';
 import AssetLifecycle from './pages/AssetLifecycle';
 import Reports from './pages/Reports';
 import NotFound from './pages/NotFound';
+import PrintChecklist from './pages/PrintChecklist';
 
 // Styles
 import './styles/index.css';
@@ -115,6 +116,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
               <Reports />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/print-checklist"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
+              <PrintChecklist />
             </ProtectedRoute>
           }
         />

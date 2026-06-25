@@ -15,6 +15,8 @@ import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS } from '../lib/constants';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
+import { isVerificationDay } from '../utils/dateHelpers';
+import { Alert } from '../components/ui/Alert';
 
 // ─── Station Dashboard (HKS / SC) ────────────────────────────────────────────
 function StationDashboard({ station }) {
@@ -110,8 +112,25 @@ function StationDashboard({ station }) {
     _rowClass: 'low-stock-row',
   }));
 
+  const { role } = useAuthStore();
+  const isSC = role === ROLES.SC;
+  const showVerificationReminder = isSC && isVerificationDay();
+
   return (
     <>
+      {showVerificationReminder && (
+        <Alert variant="warning" className="animate-fade-in" style={{ marginBottom: 'var(--space-4)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <strong>Action Required:</strong> Today is the scheduled day for Stock Verification. Please generate the checklist and verify physical stock.
+            </div>
+            <Button variant="primary" onClick={() => window.open('/print-checklist', '_blank')}>
+              Generate Checklist
+            </Button>
+          </div>
+        </Alert>
+      )}
+
       {/* Welcome Banner */}
       <div className="dashboard-welcome animate-fade-in">
         <div>
@@ -121,6 +140,13 @@ function StationDashboard({ station }) {
             <Building2 size={14} />
             {station.code} — {station.name}
           </div>
+          {isSC && (
+            <div style={{ marginTop: '1rem' }}>
+              <Button variant="outline" onClick={() => window.open('/print-checklist', '_blank')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
+                <ClipboardList size={16} /> Print Verification Checklist
+              </Button>
+            </div>
+          )}
         </div>
         <Activity size={48} style={{ opacity: 0.2 }} />
       </div>
