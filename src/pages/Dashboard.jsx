@@ -16,7 +16,7 @@ import { ROLES, ALS_GROUPS } from '../lib/constants';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 import { isVerificationDay } from '../utils/dateHelpers';
-import { Alert } from '../components/ui/Alert';
+import Alert from '../components/ui/Alert';
 
 // ─── Station Dashboard (HKS / SC) ────────────────────────────────────────────
 function StationDashboard({ station }) {
