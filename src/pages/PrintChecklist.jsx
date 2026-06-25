@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useStationStore } from '../store/stationStore';
-import { ROLES } from '../lib/constants';
 
 export default function PrintChecklist() {
   const { selectedStation } = useStationStore();
@@ -17,17 +16,9 @@ export default function PrintChecklist() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!selectedStation) {
-      setError('No station selected. Please go back and select a station first.');
-      setIsLoading(false);
-      return;
-    }
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStation]);
 
-  const fetchData = async () => {
+
+  const fetchData = React.useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -109,7 +100,19 @@ export default function PrintChecklist() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedStation]);
+
+  useEffect(() => {
+    if (!selectedStation) {
+      // Avoid calling setState synchronously in effect, use setTimeout
+      setTimeout(() => {
+        setError('No station selected. Please go back and select a station first.');
+        setIsLoading(false);
+      }, 0);
+      return;
+    }
+    fetchData();
+  }, [selectedStation, fetchData]);
 
   if (isLoading) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading print view...</div>;
