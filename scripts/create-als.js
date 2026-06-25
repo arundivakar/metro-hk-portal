@@ -24,7 +24,7 @@ async function run() {
 
   await supabase.from('users_profile').insert({
     id: authUser.user.id,
-    full_name: 'Agency Level Supervisor',
+    full_name: 'Assistant Line Superintendent',
     role: 'ALS',
     employee_id: 'ALS-001'
   });
