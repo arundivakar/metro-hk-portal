@@ -3,7 +3,7 @@ export const ROLES = {
   HKS: 'HKS',   // House Keeping Supervisor
   HKTL: 'HKTL', // House Keeping Team Lead
   SC: 'SC',     // Station Controller
-  ALS: 'ALS',   // Assistant Line Supervisor
+  ALS: 'ALS',   // Assistant Line Superintendent
 };
 
 // ─── Request Status ───────────────────────────────────────────────────────────
