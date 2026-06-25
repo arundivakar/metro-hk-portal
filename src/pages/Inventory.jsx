@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Search, AlertTriangle, UploadCloud, Download } from 'lucide-react';
+import { Package, Search, AlertTriangle, UploadCloud, Download, ClipboardList } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -230,11 +230,18 @@ export default function Inventory() {
           icon={<Package size={16} />}
           subtitle={`${displayData.length} items`}
           action={
-            (role === ROLES.SC || (role === ROLES.ALS || role === ROLES.HKTL)) && (
-              <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
-                <UploadCloud size={14} /> Import CSV
-              </Button>
-            )
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              {role === ROLES.SC && (
+                <Button variant="outline" onClick={() => window.open('/print-checklist', '_blank')}>
+                  <ClipboardList size={14} /> Print Verification Checklist
+                </Button>
+              )}
+              {(role === ROLES.SC || (role === ROLES.ALS || role === ROLES.HKTL)) && (
+                <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
+                  <UploadCloud size={14} /> Import CSV
+                </Button>
+              )}
+            </div>
           }
         />
         <CardBody>
