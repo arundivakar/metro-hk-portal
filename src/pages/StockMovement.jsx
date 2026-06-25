@@ -241,7 +241,7 @@ export default function StockMovement() {
 
       if (error) throw error;
 
-      generateMonthlyBillPdf(month, year, data || [], items);
+      await generateMonthlyBillPdf(month, year, data || [], items);
       setShowBillModal(false);
       toast.success('Monthly Bill generated successfully!');
     } catch (err) {

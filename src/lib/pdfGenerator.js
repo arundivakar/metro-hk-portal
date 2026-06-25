@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ALS_GROUPS } from './constants';
 
-export const generateMonthlyBillPdf = (month, year, consumptionData, allItems = []) => {
+export const generateMonthlyBillPdf = async (month, year, consumptionData, allItems = []) => {
   const doc = new jsPDF('landscape');
   
   // Title
@@ -16,6 +16,22 @@ export const generateMonthlyBillPdf = (month, year, consumptionData, allItems = 
   doc.setFont('helvetica', 'normal');
   doc.text('Revision No: 01', doc.internal.pageSize.getWidth() - 15, 15, { align: 'right' });
   doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, doc.internal.pageSize.getWidth() - 15, 20, { align: 'right' });
+
+  // Add Logo
+  try {
+    const response = await fetch('/kmrl_logo.png');
+    const blob = await response.blob();
+    const base64data = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+    // Adjust x, y, width, height for the logo
+    // Let's place it at top-left
+    doc.addImage(base64data, 'PNG', 14, 5, 20, 20);
+  } catch (err) {
+    console.warn('Failed to load logo for PDF', err);
+  }
 
   // Subtitle banner
   doc.setFillColor(0, 150, 136); // Teal
