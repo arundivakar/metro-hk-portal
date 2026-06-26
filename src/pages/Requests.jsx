@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ClipboardList, Plus } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { ClipboardList, Plus, Camera } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -32,6 +32,9 @@ export default function Requests() {
   const [form, setForm] = useState({
     item_id: '', quantity: '', priority: PRIORITY.NORMAL, reason: '',
   });
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => { loadData(); }, [selectedStation?.id, role]); // eslint-disable-line
 
@@ -89,7 +92,27 @@ export default function Requests() {
       return;
     }
     setSubmitting(true);
+    
+    let imageUrl = null;
     try {
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('image', imageFile);
+        const apiKey = import.meta.env.VITE_IMGBB_API_KEY;
+        if (!apiKey) throw new Error('ImgBB API key is missing from environment configuration.');
+
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+          method: 'POST',
+          body: formData,
+        });
+        const imgData = await res.json();
+        if (imgData.success) {
+          imageUrl = imgData.data.url;
+        } else {
+          throw new Error('Image upload failed: ' + imgData.error?.message);
+        }
+      }
+
       const { error: err } = await supabase.from('consumable_requests').insert({
         station_id: selectedStation.id,
         item_id: form.item_id,
@@ -98,6 +121,7 @@ export default function Requests() {
         unit_rate: unitRate,
         priority: form.priority,
         reason: form.reason || null,
+        image_url: imageUrl,
       });
       if (err) throw err;
       toast.success(
@@ -107,6 +131,8 @@ export default function Requests() {
       );
       setShowForm(false);
       setForm({ item_id: '', quantity: '', priority: PRIORITY.NORMAL, reason: '' });
+      setImageFile(null);
+      setImagePreview(null);
       loadData();
     } catch (err) {
       setError(err.message);
@@ -123,6 +149,11 @@ export default function Requests() {
     { key: 'created_at', label: 'Date', sortable: true, render: (v) => new Date(v).toLocaleDateString('en-IN') },
     ...(role !== ROLES.HKS ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
     { key: 'item', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },
+    { key: 'photo', label: 'Photo', render: (_, r) => r.image_url ? (
+      <a href={r.image_url} target="_blank" rel="noreferrer" title="View Full Image">
+        <img src={r.image_url} alt="Condition" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} />
+      </a>
+    ) : <span style={{ color: 'var(--text-muted)' }}>—</span> },
     { key: 'quantity', label: 'Qty', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
     { key: 'estimated_cost', label: 'Est. Cost', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
     { key: 'priority', label: 'Priority', render: (v) => <PriorityBadge priority={v} /> },
@@ -167,7 +198,12 @@ export default function Requests() {
       {/* New Request Modal (HKS only) */}
       <Modal
         isOpen={showForm}
-        onClose={() => { setShowForm(false); setError(''); }}
+        onClose={() => { 
+          setShowForm(false); 
+          setError(''); 
+          setImageFile(null);
+          setImagePreview(null);
+        }}
         title="New Consumable Request"
         footer={
           <>
@@ -215,6 +251,57 @@ export default function Requests() {
           )}
 
           <div className="form-group">
+            <label className="form-label">Condition Photo (Optional)</label>
+            <div 
+              style={{
+                border: '2px dashed var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-4)',
+                textAlign: 'center',
+                cursor: 'pointer',
+                backgroundColor: 'var(--bg-subtle)'
+              }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {imagePreview ? (
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <img src={imagePreview} alt="Preview" style={{ maxHeight: 150, borderRadius: 'var(--radius-sm)' }} />
+                  <Button 
+                    variant="danger" 
+                    size="sm" 
+                    style={{ position: 'absolute', top: 5, right: 5, padding: '2px 6px' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setImageFile(null);
+                      setImagePreview(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  >✕</Button>
+                </div>
+              ) : (
+                <div style={{ color: 'var(--text-muted)' }}>
+                  <Camera size={32} style={{ margin: '0 auto var(--space-2)', display: 'block' }} />
+                  Click to upload or take a photo
+                </div>
+              )}
+              <input 
+                ref={fileInputRef}
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    setImageFile(file);
+                    setImagePreview(URL.createObjectURL(file));
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginTop: 'var(--space-4)' }}>
             <label className="form-label" htmlFor="req-reason">Reason / Justification</label>
             <textarea id="req-reason" className="form-control" rows={3}
               value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
