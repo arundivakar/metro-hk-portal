@@ -19,7 +19,7 @@ const today = new Date().toISOString().split('T')[0];
 export default function Requests() {
   const { role, profile } = useAuthStore();
   const { selectedStation, alsGroupFilter } = useStationStore();
-  const { fetchInventoryItems } = useInventory(selectedStation?.id);
+  const { inventory, fetchInventory, fetchInventoryItems } = useInventory(selectedStation?.id);
 
   const [requests, setRequests] = useState([]);
   const [items, setItems] = useState([]);
@@ -43,6 +43,10 @@ export default function Requests() {
     try {
       const itemsData = await fetchInventoryItems();
       setItems(itemsData);
+      
+      if (selectedStation?.id) {
+        await fetchInventory();
+      }
 
       let query = supabase.from('consumable_requests')
         .select(`
@@ -84,8 +88,12 @@ export default function Requests() {
   const estimatedCost = form.quantity && unitRate ? parseFloat(form.quantity) * unitRate : 0;
   const willForward = estimatedCost > APPROVAL_THRESHOLD;
 
+  const selectedItemStock = inventory.find(i => i.item_id === form.item_id)?.current_stock || 0;
+  const isOutOfStock = form.item_id && selectedItemStock <= 0;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isOutOfStock) return;
     setError('');
     if (!form.item_id || !form.quantity) {
       setError('Item and quantity are required.');
@@ -206,7 +214,7 @@ export default function Requests() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button variant="primary" form="request-form" type="submit" isLoading={submitting}>
+            <Button variant="primary" form="request-form" type="submit" isLoading={submitting} disabled={isOutOfStock}>
               Submit Request
             </Button>
           </>
@@ -238,13 +246,19 @@ export default function Requests() {
           </div>
 
           {/* Cost preview */}
-          {selectedItem && form.quantity && (
+          {selectedItem && form.quantity && !isOutOfStock && (
             <Alert variant="info" style={{ marginBottom: 'var(--space-4)' }}>
               <strong>Estimated Cost: ₹{estimatedCost.toFixed(2)}</strong>
               {' — '}
               {willForward
                 ? `Will be routed to HKTL ➔ SC ➔ ALS (Amount > ₹${APPROVAL_THRESHOLD})`
                 : `Will be routed to HKTL ➔ SC`}
+            </Alert>
+          )}
+
+          {isOutOfStock && (
+            <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>
+              <strong>Out of Stock!</strong> This item is currently unavailable in the station's inventory. You cannot place a request until the Station Controller replenishes the stock.
             </Alert>
           )}
 

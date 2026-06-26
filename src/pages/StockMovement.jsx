@@ -44,6 +44,9 @@ export default function StockMovement() {
   
   // Filter for history logs
   const [historyItemFilter, setHistoryItemFilter] = useState('All');
+  
+  // Search filter for aggregate table
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Form States
   const [formQty, setFormQty] = useState('');
@@ -107,7 +110,7 @@ export default function StockMovement() {
     const d = new Date(year, monthStr, 0); // Last day of month
     const endDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    return items.map((item, index) => {
+    const rawData = items.map((item, index) => {
       const stockRow = currentStock.find(s => s.item_id === item.id);
       const currentQty = stockRow?.current_stock || 0;
 
@@ -141,7 +144,6 @@ export default function StockMovement() {
 
       return {
         id: item.id,
-        sl_no: index + 1,
         item_name: item.name,
         brand: item.rate_master?.brand || 'ORDINARY',
         supplier: 'Tricuesta',
@@ -153,7 +155,38 @@ export default function StockMovement() {
         closing_stock: closingStock > 0 ? closingStock : 0
       };
     });
+
+    // Sort the data: stock > 0 first, then by consumption (descending), then by name
+    rawData.sort((a, b) => {
+      const aHasStock = a.closing_stock > 0;
+      const bHasStock = b.closing_stock > 0;
+      
+      if (aHasStock && !bHasStock) return -1;
+      if (!aHasStock && bHasStock) return 1;
+      
+      if (b.consumption !== a.consumption) {
+        return b.consumption - a.consumption; // mostly used items first
+      }
+      
+      return a.item_name.localeCompare(b.item_name);
+    });
+    
+    // Add sl_no after sorting
+    return rawData.map((item, index) => ({
+      ...item,
+      sl_no: index + 1
+    }));
   }, [items, currentStock, receivedLogs, consumptionLogs, selectedMonth]);
+
+  // Filter tableData by search term
+  const filteredTableData = useMemo(() => {
+    if (!searchTerm) return tableData;
+    const lowerSearch = searchTerm.toLowerCase();
+    return tableData.filter(item => 
+      item.item_name.toLowerCase().includes(lowerSearch) || 
+      item.brand.toLowerCase().includes(lowerSearch)
+    );
+  }, [tableData, searchTerm]);
 
   const handleConsumptionSubmit = async (e) => {
     e.preventDefault();
@@ -344,11 +377,30 @@ export default function StockMovement() {
 
       {activeTab === 'aggregate' && (
         <Card>
-          <CardHeader title="Comprehensive Stock Movement" icon={<FileText size={16} />} subtitle={`${tableData.length} materials tracked`} />
+          <div className="filter-bar" style={{ padding: 'var(--space-4) var(--space-4) 0', marginBottom: 0, display: 'flex', gap: 'var(--space-2)' }}>
+            <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+              <input 
+                type="text" 
+                className="form-control" 
+                placeholder="Search materials by name or brand..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ paddingLeft: '32px' }}
+              />
+              <svg 
+                style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--color-gray-400)' }} 
+                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </div>
+          </div>
+          <CardHeader title="Comprehensive Stock Movement" icon={<FileText size={16} />} subtitle={`${filteredTableData.length} materials tracked`} />
           <div style={{ overflowX: 'auto' }}>
             <DataTable
               columns={columns}
-              data={tableData}
+              data={filteredTableData}
               isLoading={isLoading}
               emptyTitle="No stock records found"
             />
