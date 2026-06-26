@@ -168,14 +168,17 @@ export default function Approvals() {
           {/* SC actions */}
           {role === ROLES.SC && r.status === REQUEST_STATUS.FORWARDED_SC && (
             <>
-              <Button variant="success" size="sm" leftIcon={<Check size={12} />} onClick={() => openAction(r, 'approved')}>
-                Approve
-              </Button>
+              {Number(r.estimated_cost) <= APPROVAL_THRESHOLD ? (
+                <Button variant="success" size="sm" leftIcon={<Check size={12} />} onClick={() => openAction(r, 'approved')}>
+                  Approve
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" leftIcon={<ArrowRight size={12} />} onClick={() => openAction(r, 'forwarded')}>
+                  Forward to ALS
+                </Button>
+              )}
               <Button variant="danger" size="sm" leftIcon={<X size={12} />} onClick={() => openAction(r, 'rejected')}>
                 Reject
-              </Button>
-              <Button variant="outline" size="sm" leftIcon={<ArrowRight size={12} />} onClick={() => openAction(r, 'forwarded')}>
-                Forward
               </Button>
             </>
           )}

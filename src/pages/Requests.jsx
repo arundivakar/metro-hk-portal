@@ -125,9 +125,7 @@ export default function Requests() {
       });
       if (err) throw err;
       toast.success(
-        willForward
-          ? `Request forwarded to ALS (cost ₹${estimatedCost.toFixed(2)} > ₹${APPROVAL_THRESHOLD})`
-          : 'Request created successfully!'
+        'Request created and sent to HKTL for review!'
       );
       setShowForm(false);
       setForm({ item_id: '', quantity: '', priority: PRIORITY.NORMAL, reason: '' });
@@ -241,12 +239,12 @@ export default function Requests() {
 
           {/* Cost preview */}
           {selectedItem && form.quantity && (
-            <Alert variant={willForward ? 'warning' : 'success'} style={{ marginBottom: 'var(--space-4)' }}>
+            <Alert variant="info" style={{ marginBottom: 'var(--space-4)' }}>
               <strong>Estimated Cost: ₹{estimatedCost.toFixed(2)}</strong>
               {' — '}
               {willForward
-                ? `⚠️ Amount exceeds ₹${APPROVAL_THRESHOLD}. This request will be automatically forwarded to ALS.`
-                : `✅ SC can approve this request.`}
+                ? `Will be routed to HKTL ➔ SC ➔ ALS (Amount > ₹${APPROVAL_THRESHOLD})`
+                : `Will be routed to HKTL ➔ SC`}
             </Alert>
           )}
 
