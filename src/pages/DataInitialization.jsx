@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -15,6 +15,8 @@ export default function DataInitialization() {
   const { role } = useAuthStore();
   const { selectedStation } = useStationStore();
   const [stations, setStations] = useState([]);
+  const isBusy = useRef(false);
+  const stockBusy = useRef(false);
   
   // Master List State
   const [masterFile, setMasterFile] = useState(null);
@@ -36,11 +38,14 @@ export default function DataInitialization() {
   }, []);
 
   const handleMasterUpload = async () => {
+    if (isBusy.current) return;
     if (!masterFile) return setMasterError('Please select a CSV file first.');
     if (!window.confirm('WARNING: This will wipe ALL current inventory and stock data. Are you absolutely sure?')) return;
 
+    isBusy.current = true;
     setMasterError('');
     setIsWiping(true);
+    console.log('Starting Master List initialization...');
 
     const normalizeKeys = (row) => {
       const normalized = {};
@@ -48,7 +53,7 @@ export default function DataInitialization() {
         if (!key) continue;
         const lowerKey = key.toLowerCase().trim();
         if (lowerKey.includes('cleaning material') || lowerKey === 'item name' || lowerKey === 'name') normalized['Cleaning Material'] = value;
-        else if (lowerKey.includes('chemical') || lowerKey.includes('category')) {
+        else if (lowerKey.includes('chemical') || lowerKey === 'category') {
           const cat = (value || '').toLowerCase().trim();
           normalized['Chemical/Consumable'] = cat.includes('chemical') ? 'Chemical' : 'Consumable';
         }
@@ -67,49 +72,69 @@ export default function DataInitialization() {
       complete: async (results) => {
         try {
           const payload = results.data.map(normalizeKeys);
+          console.log('Parsed master payload count:', payload.length);
           
           if (payload.length > 0) {
             const firstRow = payload[0];
             // The Station Stock CSV has "Tender Year" and "Brand Name" but NOT "Brand" or "Rate including GST"
             if (!('Rate including GST' in firstRow) && !('Brand' in firstRow)) {
               setIsWiping(false);
+              isBusy.current = false;
               return setMasterError('Validation failed: This looks like the Station Stock CSV. Please upload the Master List CSV here.');
             }
           }
           
           // 1. Wipe database
+          console.log('Executing database wipe...');
           const { error: wipeErr } = await supabase.rpc('fn_wipe_database');
           if (wipeErr) throw wipeErr;
 
           // 2. Import new list
+          console.log('[MasterUpload] Step 4 — Sending', payload.length, 'rows to Supabase RPC fn_import_master_list...');
           const { error: importErr } = await supabase.rpc('fn_import_master_list', { p_payload: payload });
           if (importErr) throw importErr;
+          console.log('[MasterUpload] Step 4 — RPC returned without error.');
 
-          toast.success('Master list successfully initialized!');
+          // 3. Verify final count in DB
+          const { count: finalCount } = await supabase.from('inventory_items').select('*', { count: 'exact', head: true });
+          console.log('[MasterUpload] Step 5 — Final inventory_items count in DB:', finalCount);
+          if (finalCount !== payload.length) {
+            console.warn(`[MasterUpload] ⚠️ MISMATCH: CSV had ${payload.length} rows but DB now has ${finalCount} rows. This indicates a double-insert.`);
+          } else {
+            console.log(`[MasterUpload] ✅ MATCH: ${finalCount} rows in DB matches CSV.`);
+          }
+
+          toast.success(`Master list initialized! ${finalCount} items loaded.`);
           setMasterFile(null);
           // reset file input visually
           document.getElementById('masterFileInput').value = '';
         } catch (err) {
-          console.error(err);
+          console.error('Master initialization error:', err);
           setMasterError(err.message || 'Failed to initialize master list.');
         } finally {
           setIsWiping(false);
+          isBusy.current = false;
         }
       },
       error: (error) => {
+        console.error('CSV Parsing error:', error);
         setMasterError(error.message);
         setIsWiping(false);
+        isBusy.current = false;
       }
     });
   };
 
   const handleStockUpload = async () => {
+    if (stockBusy.current) return;
     if (!stockFile) return setStockError('Please select a CSV file first.');
     if (!selectedStationId) return setStockError('Please select a station.');
     if (!window.confirm('This will upload and merge stock data for the selected station. Continue?')) return;
 
     setStockError('');
     setIsUploadingStock(true);
+    stockBusy.current = true;
+    console.log('[StockUpload] Starting station stock initialization...');
 
     const normalizeKeys = (row) => {
       const normalized = {};
@@ -132,6 +157,7 @@ export default function DataInitialization() {
       complete: async (results) => {
         try {
           const payload = results.data.map(normalizeKeys);
+          console.log('[StockUpload] Parsed CSV rows:', payload.length);
           
           if (payload.length > 0) {
             const firstRow = payload[0];
@@ -142,11 +168,13 @@ export default function DataInitialization() {
           }
           
           // Import station stock
+          console.log('[StockUpload] Sending', payload.length, 'rows to fn_import_station_stock...');
           const { error: importErr } = await supabase.rpc('fn_import_station_stock', { 
             p_station_id: selectedStationId,
             p_payload: payload 
           });
           if (importErr) throw importErr;
+          console.log('[StockUpload] Import complete.');
 
           toast.success('Station stock successfully initialized!');
           setStockFile(null);
@@ -154,15 +182,18 @@ export default function DataInitialization() {
           // reset file input visually
           document.getElementById('stockFileInput').value = '';
         } catch (err) {
-          console.error(err);
+          console.error('[StockUpload] Error:', err);
           setStockError(err.message || 'Failed to initialize station stock.');
         } finally {
           setIsUploadingStock(false);
+          stockBusy.current = false;
         }
       },
       error: (error) => {
+        console.error('[StockUpload] CSV parse error:', error);
         setStockError(error.message);
         setIsUploadingStock(false);
+        stockBusy.current = false;
       }
     });
   };
