@@ -48,7 +48,10 @@ export default function DataInitialization() {
         if (!key) continue;
         const lowerKey = key.toLowerCase().trim();
         if (lowerKey.includes('cleaning material') || lowerKey === 'item name' || lowerKey === 'name') normalized['Cleaning Material'] = value;
-        else if (lowerKey.includes('chemical') || lowerKey.includes('category')) normalized['Chemical/Consumable'] = value;
+        else if (lowerKey.includes('chemical') || lowerKey.includes('category')) {
+          const cat = (value || '').toLowerCase().trim();
+          normalized['Chemical/Consumable'] = cat.includes('chemical') ? 'Chemical' : 'Consumable';
+        }
         else if (lowerKey.includes('rate')) normalized['Rate including GST'] = value;
         else if (lowerKey.includes('brand')) normalized['Brand'] = value;
         else if (lowerKey.includes('tender')) normalized['Tender Year'] = value;
