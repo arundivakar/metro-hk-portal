@@ -70,7 +70,8 @@ export default function DataInitialization() {
           
           if (payload.length > 0) {
             const firstRow = payload[0];
-            if (!('Rate including GST' in firstRow) && !('Brand' in firstRow) && !('Tender Year' in firstRow)) {
+            // The Station Stock CSV has "Tender Year" and "Brand Name" but NOT "Brand" or "Rate including GST"
+            if (!('Rate including GST' in firstRow) && !('Brand' in firstRow)) {
               setIsWiping(false);
               return setMasterError('Validation failed: This looks like the Station Stock CSV. Please upload the Master List CSV here.');
             }
