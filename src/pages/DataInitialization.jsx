@@ -146,6 +146,9 @@ export default function DataInitialization() {
         else if (lowerKey.includes('good condition') || lowerKey.includes('in use') || lowerKey.includes('currently in use')) normalized['In Good condition (Currently in Use)'] = value;
         else if (lowerKey.includes('partially damaged') || lowerKey.includes('usable')) normalized['Partially Damaged Items available at station (Usable)'] = value;
         else if (lowerKey.includes('disposed') || lowerKey.includes('unusable')) normalized['Disposed Items available at station (unusable)'] = value;
+        // Pass brand & tender year so the DB can match precisely when names are duplicated
+        else if (lowerKey.includes('brand')) normalized['Brand'] = value;
+        else if (lowerKey.includes('tender')) normalized['Tender Year'] = value;
         else normalized[key] = value;
       }
       return normalized;
