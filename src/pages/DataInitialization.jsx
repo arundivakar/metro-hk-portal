@@ -68,12 +68,20 @@ export default function DataInitialization() {
         try {
           const payload = results.data.map(normalizeKeys);
           
+          // Deduplicate the payload to guarantee no double-inserts
+          const uniquePayloadMap = new Map();
+          payload.forEach(item => {
+            const name = (item['Cleaning Material'] || '').trim().toLowerCase();
+            if (name) uniquePayloadMap.set(name, item);
+          });
+          const uniquePayload = Array.from(uniquePayloadMap.values());
+          
           // 1. Wipe database
           const { error: wipeErr } = await supabase.rpc('fn_wipe_database');
           if (wipeErr) throw wipeErr;
 
           // 2. Import new list
-          const { error: importErr } = await supabase.rpc('fn_import_master_list', { p_payload: payload });
+          const { error: importErr } = await supabase.rpc('fn_import_master_list', { p_payload: uniquePayload });
           if (importErr) throw importErr;
 
           toast.success('Master list successfully initialized!');
@@ -124,10 +132,18 @@ export default function DataInitialization() {
         try {
           const payload = results.data.map(normalizeKeys);
           
+          // Deduplicate the payload
+          const uniquePayloadMap = new Map();
+          payload.forEach(item => {
+            const name = (item['Cleaning Material'] || '').trim().toLowerCase();
+            if (name) uniquePayloadMap.set(name, item);
+          });
+          const uniquePayload = Array.from(uniquePayloadMap.values());
+          
           // Import station stock
           const { error: importErr } = await supabase.rpc('fn_import_station_stock', { 
             p_station_id: selectedStationId,
-            p_payload: payload 
+            p_payload: uniquePayload 
           });
           if (importErr) throw importErr;
 
