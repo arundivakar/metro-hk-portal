@@ -144,8 +144,9 @@ export default function DataInitialization() {
         if (lowerKey.includes('cleaning material') || lowerKey === 'item name' || lowerKey === 'name') normalized['Cleaning Material'] = value;
         else if (lowerKey.includes('closing stock')) normalized['Closing Stock'] = value;
         else if (lowerKey.includes('good condition') || lowerKey.includes('in use') || lowerKey.includes('currently in use')) normalized['In Good condition (Currently in Use)'] = value;
-        else if (lowerKey.includes('partially damaged') || lowerKey.includes('usable')) normalized['Partially Damaged Items available at station (Usable)'] = value;
+        // IMPORTANT: check 'unusable' BEFORE 'usable' — 'unusable' contains 'usable' as a substring
         else if (lowerKey.includes('disposed') || lowerKey.includes('unusable')) normalized['Disposed Items available at station (unusable)'] = value;
+        else if (lowerKey.includes('partially damaged') || lowerKey.includes('usable')) normalized['Partially Damaged Items available at station (Usable)'] = value;
         // Pass brand, supplier & tender year for precise DB matching
         else if (lowerKey.includes('brand')) normalized['Brand'] = value;
         else if (lowerKey.includes('supplier')) normalized['Supplier'] = value;
@@ -155,7 +156,9 @@ export default function DataInitialization() {
       return normalized;
     };
 
-    // Filter rows: remove blank rows, sub-headers, and rows missing a Cleaning Material name
+    const toNum = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
+
+    // Filter rows: remove blank rows, sub-headers, and rows where ALL stock values are zero
     const isValidStockRow = (row) => {
       const name = (row['Cleaning Material'] || '').trim();
       if (!name) return false; // blank row
@@ -163,9 +166,15 @@ export default function DataInitialization() {
       const nameLower = name.toLowerCase();
       if (nameLower === 'cleaning material' || nameLower === 'item name' || nameLower === 'name') return false;
       if (nameLower === 'chemical' || nameLower === 'consumable') return false;
-      // Skip if no numeric stock values at all (likely a sub-header row)
+      // Skip if Closing Stock is non-numeric text (likely a mid-table sub-header row)
       const closing = row['Closing Stock'];
       if (closing !== undefined && closing !== '' && isNaN(Number(closing))) return false;
+      // Skip rows where ALL quantity fields are zero — nothing to store
+      const totalStock = toNum(row['Closing Stock'])
+        + toNum(row['In Good condition (Currently in Use)'])
+        + toNum(row['Partially Damaged Items available at station (Usable)'])
+        + toNum(row['Disposed Items available at station (unusable)']);
+      if (totalStock === 0) return false;
       return true;
     };
 
