@@ -68,6 +68,14 @@ export default function DataInitialization() {
         try {
           const payload = results.data.map(normalizeKeys);
           
+          if (payload.length > 0) {
+            const firstRow = payload[0];
+            if (!('Rate including GST' in firstRow) && !('Brand' in firstRow) && !('Tender Year' in firstRow)) {
+              setIsWiping(false);
+              return setMasterError('Validation failed: This looks like the Station Stock CSV. Please upload the Master List CSV here.');
+            }
+          }
+          
           // Deduplicate the payload to guarantee no double-inserts
           const uniquePayloadMap = new Map();
           payload.forEach(item => {
@@ -131,6 +139,14 @@ export default function DataInitialization() {
       complete: async (results) => {
         try {
           const payload = results.data.map(normalizeKeys);
+          
+          if (payload.length > 0) {
+            const firstRow = payload[0];
+            if (!('Closing Stock' in firstRow)) {
+              setIsUploadingStock(false);
+              return setStockError('Validation failed: This looks like the Master List CSV. Please upload the Station Stock CSV here.');
+            }
+          }
           
           // Deduplicate the payload
           const uniquePayloadMap = new Map();
