@@ -358,7 +358,7 @@ function ALSDashboard() {
         />
       </div>
 
-      <div className="two-col-grid" style={{ marginBottom: 'var(--space-6)' }}>
+      <div style={{ marginBottom: 'var(--space-6)' }}>
         <Card>
           <CardHeader title="All Stations Overview" icon={<Building2 size={16} />} />
           <CardBody style={{ padding: 'var(--space-5)' }}>

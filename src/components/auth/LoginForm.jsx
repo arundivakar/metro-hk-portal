@@ -77,7 +77,7 @@ export default function LoginForm({ onSuccess }) {
                 type="text"
                 className="form-control"
                 style={{ paddingLeft: 36 }}
-                placeholder="e.g. scr_alva"
+                placeholder="e.g. sc_alva"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
