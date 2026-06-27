@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Search, AlertTriangle, UploadCloud, Download, ClipboardList } from 'lucide-react';
+import { Package, Search, AlertTriangle, ClipboardList } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -14,26 +14,6 @@ import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 import toast from 'react-hot-toast';
 
-function parseCSVRow(str) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    if (inQuotes) {
-      if (char === '"') {
-        if (str[i + 1] === '"') { current += '"'; i++; }
-        else { inQuotes = false; }
-      } else { current += char; }
-    } else {
-      if (char === '"') { inQuotes = true; }
-      else if (char === ',') { result.push(current); current = ''; }
-      else { current += char; }
-    }
-  }
-  result.push(current);
-  return result.map(s => s.trim());
-}
 
 export default function Inventory() {
   const { role } = useAuthStore();
@@ -43,9 +23,6 @@ export default function Inventory() {
   const [allStationsInventory, setAllStationsInventory] = useState([]);
   const [stationFilter, setStationFilter] = useState('All');
   const [alsLoading, setAlsLoading] = useState(false);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importWipe, setImportWipe] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
 
   const { inventory, isLoading, fetchInventory, getLowStockItems } = useInventory(
     (role !== ROLES.ALS && role !== ROLES.HKTL) ? selectedStation?.id : null
@@ -76,64 +53,6 @@ export default function Inventory() {
     }
   };
 
-  const handleImport = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsImporting(true);
-    try {
-      const text = await file.text();
-      const lines = text.split(/\r?\n/).filter(line => line.trim());
-      if (lines.length < 2) throw new Error("CSV is empty or missing data rows");
-
-      const data = lines.slice(1).map(parseCSVRow).map(row => ({
-        item_name: row[0],
-        category: row[1] || 'Consumable',
-        unit: row[2] || 'Nos',
-        unit_rate: Number(row[3]) || 0,
-        brand: row[4] || null,
-        tender_year: row[5] || null,
-        min_level: Number(row[6]) || 0,
-        opening_stock: Number(row[7]) || 0
-      }));
-
-      const { error } = await supabase.rpc('fn_import_inventory', {
-        p_station_id: selectedStation?.id || null,
-        p_wipe_existing: importWipe,
-        p_payload: data
-      });
-
-      if (error) throw error;
-      toast.success("Inventory imported successfully!");
-      setIsImportModalOpen(false);
-      setImportWipe(false);
-      if ((role !== ROLES.ALS && role !== ROLES.HKTL) && selectedStation?.id) {
-        fetchInventory(selectedStation.id);
-      } else {
-        loadAllInventory();
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error(err.message || "Failed to import CSV");
-    } finally {
-      setIsImporting(false);
-      e.target.value = ''; // reset file input
-    }
-  };
-
-  const downloadTemplate = () => {
-    const headers = "Item Name,Category,Unit,Unit Rate,Brand,Tender Year,Min Level,Opening Stock\n";
-    const sample = 'Acrylic Dry Mop,"Consumable",Nos,120.50,Klean,2025-26,10,50\nBleaching Powder,"Chemical",Kg,45.00,Tricuesta,2025-26,5,100';
-    const blob = new Blob([headers + sample], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'inventory_import_template.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
 
   // Build display data
   const rawData = (role === ROLES.ALS || role === ROLES.HKTL) ? allStationsInventory : inventory;
@@ -234,11 +153,6 @@ export default function Inventory() {
               <Button variant="outline" onClick={() => window.open('/print-checklist', '_blank')}>
                 <ClipboardList size={14} /> Print Verification Checklist
               </Button>
-              {(role === ROLES.SC || (role === ROLES.ALS || role === ROLES.HKTL)) && (
-                <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
-                  <UploadCloud size={14} /> Import CSV
-                </Button>
-              )}
             </div>
           }
         />
@@ -278,42 +192,6 @@ export default function Inventory() {
           emptyIcon={<Package size={28} />}
         />
       </Card>
-
-      <Modal
-        isOpen={isImportModalOpen}
-        onClose={() => !isImporting && setIsImportModalOpen(false)}
-        title="Import Inventory via CSV"
-        size="md"
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-            <Button variant="ghost" onClick={downloadTemplate} disabled={isImporting}>
-              <Download size={14} /> Download Template
-            </Button>
-            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-              <Button variant="outline" onClick={() => setIsImportModalOpen(false)} disabled={isImporting}>Cancel</Button>
-              <label className="btn btn-primary" style={{ cursor: isImporting ? 'not-allowed' : 'pointer' }}>
-                <UploadCloud size={14} /> {isImporting ? 'Importing...' : 'Select CSV & Import'}
-                <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImport} disabled={isImporting} />
-              </label>
-            </div>
-          </div>
-        }
-      >
-        <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)' }}>
-          <p style={{ marginBottom: 'var(--space-2)' }}>Upload a CSV file to initialize or replace your inventory items.</p>
-          <ul style={{ listStyle: 'disc', paddingLeft: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
-            <li>Must contain exactly 8 columns (see template).</li>
-            <li><strong>Opening Stock</strong> will automatically be credited to your current station.</li>
-          </ul>
-          
-          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3)', background: 'var(--color-danger-50)', border: '1px solid var(--color-danger-200)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={importWipe} onChange={(e) => setImportWipe(e.target.checked)} disabled={isImporting} />
-            <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-danger-700)' }}>
-              Factory Reset: Wipe all existing catalogue items, stock, and logs before importing.
-            </span>
-          </label>
-        </div>
-      </Modal>
     </Layout>
   );
 }
