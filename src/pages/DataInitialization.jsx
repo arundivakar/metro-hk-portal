@@ -146,12 +146,27 @@ export default function DataInitialization() {
         else if (lowerKey.includes('good condition') || lowerKey.includes('in use') || lowerKey.includes('currently in use')) normalized['In Good condition (Currently in Use)'] = value;
         else if (lowerKey.includes('partially damaged') || lowerKey.includes('usable')) normalized['Partially Damaged Items available at station (Usable)'] = value;
         else if (lowerKey.includes('disposed') || lowerKey.includes('unusable')) normalized['Disposed Items available at station (unusable)'] = value;
-        // Pass brand & tender year so the DB can match precisely when names are duplicated
+        // Pass brand, supplier & tender year for precise DB matching
         else if (lowerKey.includes('brand')) normalized['Brand'] = value;
+        else if (lowerKey.includes('supplier')) normalized['Supplier'] = value;
         else if (lowerKey.includes('tender')) normalized['Tender Year'] = value;
         else normalized[key] = value;
       }
       return normalized;
+    };
+
+    // Filter rows: remove blank rows, sub-headers, and rows missing a Cleaning Material name
+    const isValidStockRow = (row) => {
+      const name = (row['Cleaning Material'] || '').trim();
+      if (!name) return false; // blank row
+      // Skip rows that look like repeated headers or category sub-headings
+      const nameLower = name.toLowerCase();
+      if (nameLower === 'cleaning material' || nameLower === 'item name' || nameLower === 'name') return false;
+      if (nameLower === 'chemical' || nameLower === 'consumable') return false;
+      // Skip if no numeric stock values at all (likely a sub-header row)
+      const closing = row['Closing Stock'];
+      if (closing !== undefined && closing !== '' && isNaN(Number(closing))) return false;
+      return true;
     };
 
     Papa.parse(stockFile, {
@@ -159,13 +174,21 @@ export default function DataInitialization() {
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          const payload = results.data.map(normalizeKeys);
-          console.log('[StockUpload] Parsed CSV rows:', payload.length);
+          const allRows = results.data.map(normalizeKeys);
+          const payload = allRows.filter(isValidStockRow);
+          console.log('[StockUpload] CSV rows parsed:', allRows.length, '| Valid rows after filtering:', payload.length);
           
+          if (payload.length === 0) {
+            setIsUploadingStock(false);
+            stockBusy.current = false;
+            return setStockError('No valid data rows found in the CSV. Please check the file.');
+          }
+
           if (payload.length > 0) {
             const firstRow = payload[0];
             if (!('Closing Stock' in firstRow)) {
               setIsUploadingStock(false);
+              stockBusy.current = false;
               return setStockError('Validation failed: This looks like the Master List CSV. Please upload the Station Stock CSV here.');
             }
           }
@@ -179,7 +202,7 @@ export default function DataInitialization() {
           if (importErr) throw importErr;
           console.log('[StockUpload] Import complete.');
 
-          toast.success('Station stock successfully initialized!');
+          toast.success(`Station stock initialized! ${payload.length} items processed.`);
           setStockFile(null);
           setSelectedStationId('');
           // reset file input visually
