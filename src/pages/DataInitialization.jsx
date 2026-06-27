@@ -42,12 +42,28 @@ export default function DataInitialization() {
     setMasterError('');
     setIsWiping(true);
 
+    const normalizeKeys = (row) => {
+      const normalized = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (!key) continue;
+        const lowerKey = key.toLowerCase().trim();
+        if (lowerKey.includes('cleaning material') || lowerKey === 'item name' || lowerKey === 'name') normalized['Cleaning Material'] = value;
+        else if (lowerKey.includes('chemical') || lowerKey.includes('category')) normalized['Chemical/Consumable'] = value;
+        else if (lowerKey.includes('rate')) normalized['Rate including GST'] = value;
+        else if (lowerKey.includes('brand')) normalized['Brand'] = value;
+        else if (lowerKey.includes('tender')) normalized['Tender Year'] = value;
+        else if (lowerKey === 'unit') normalized['Unit'] = value;
+        else normalized[key] = value;
+      }
+      return normalized;
+    };
+
     Papa.parse(masterFile, {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          const payload = results.data;
+          const payload = results.data.map(normalizeKeys);
           
           // 1. Wipe database
           const { error: wipeErr } = await supabase.rpc('fn_wipe_database');
@@ -83,12 +99,27 @@ export default function DataInitialization() {
     setStockError('');
     setIsUploadingStock(true);
 
+    const normalizeKeys = (row) => {
+      const normalized = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (!key) continue;
+        const lowerKey = key.toLowerCase().trim();
+        if (lowerKey.includes('cleaning material') || lowerKey === 'item name' || lowerKey === 'name') normalized['Cleaning Material'] = value;
+        else if (lowerKey.includes('closing stock')) normalized['Closing Stock'] = value;
+        else if (lowerKey.includes('good condition') || lowerKey.includes('in use') || lowerKey.includes('currently in use')) normalized['In Good condition (Currently in Use)'] = value;
+        else if (lowerKey.includes('partially damaged') || lowerKey.includes('usable')) normalized['Partially Damaged Items available at station (Usable)'] = value;
+        else if (lowerKey.includes('disposed') || lowerKey.includes('unusable')) normalized['Disposed Items available at station (unusable)'] = value;
+        else normalized[key] = value;
+      }
+      return normalized;
+    };
+
     Papa.parse(stockFile, {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          const payload = results.data;
+          const payload = results.data.map(normalizeKeys);
           
           // Import station stock
           const { error: importErr } = await supabase.rpc('fn_import_station_stock', { 
