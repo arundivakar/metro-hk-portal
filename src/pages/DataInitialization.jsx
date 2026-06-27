@@ -23,7 +23,7 @@ export default function DataInitialization() {
 
   // Station Stock State
   const [stockFile, setStockFile] = useState(null);
-  const [selectedStation, setSelectedStation] = useState('');
+  const [selectedStationId, setSelectedStationId] = useState('');
   const [isUploadingStock, setIsUploadingStock] = useState(false);
   const [stockError, setStockError] = useState('');
 
@@ -77,7 +77,7 @@ export default function DataInitialization() {
 
   const handleStockUpload = async () => {
     if (!stockFile) return setStockError('Please select a CSV file first.');
-    if (!selectedStation) return setStockError('Please select a station.');
+    if (!selectedStationId) return setStockError('Please select a station.');
     if (!window.confirm('This will upload and merge stock data for the selected station. Continue?')) return;
 
     setStockError('');
@@ -92,14 +92,14 @@ export default function DataInitialization() {
           
           // Import station stock
           const { error: importErr } = await supabase.rpc('fn_import_station_stock', { 
-            p_station_id: selectedStation,
+            p_station_id: selectedStationId,
             p_payload: payload 
           });
           if (importErr) throw importErr;
 
           toast.success('Station stock successfully initialized!');
           setStockFile(null);
-          setSelectedStation('');
+          setSelectedStationId('');
           // reset file input visually
           document.getElementById('stockFileInput').value = '';
         } catch (err) {
@@ -187,8 +187,8 @@ export default function DataInitialization() {
               <label className="form-label form-label-required">Select Station</label>
               <select 
                 className="form-control" 
-                value={selectedStation} 
-                onChange={(e) => setSelectedStation(e.target.value)}
+                value={selectedStationId} 
+                onChange={(e) => setSelectedStationId(e.target.value)}
               >
                 <option value="">— Select Station —</option>
                 {allowedStationsForUser.map(s => (
@@ -215,7 +215,7 @@ export default function DataInitialization() {
               variant="primary" 
               onClick={handleStockUpload} 
               isLoading={isUploadingStock}
-              disabled={!stockFile || !selectedStation}
+              disabled={!stockFile || !selectedStationId}
               style={{ width: '100%' }}
             >
               <FileUp size={16} /> Initialize Station Stock
