@@ -3,6 +3,7 @@ import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { ROLES, ALS_GROUPS } from '../lib/constants';
+import { useStationStore } from '../store/stationStore';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -12,6 +13,7 @@ import { FileUp, DatabaseZap, ShieldAlert } from 'lucide-react';
 
 export default function DataInitialization() {
   const { role } = useAuthStore();
+  const { selectedStation } = useStationStore();
   const [stations, setStations] = useState([]);
   
   // Master List State
@@ -114,8 +116,16 @@ export default function DataInitialization() {
     });
   };
 
-  // Restrict Master List wipe to ALS and HKTL
-  const canWipeMaster = role === ROLES.ALS || role === ROLES.HKTL;
+  // Restrict Master List wipe to ALS and PNCU SC
+  const canWipeMaster = role === ROLES.ALS || (role === ROLES.SC && selectedStation?.code === 'PNCU');
+
+  // Filter stations based on role
+  const allowedStationsForUser = stations.filter(s => {
+    if (role === ROLES.SC) {
+      return s.id === selectedStation?.id;
+    }
+    return true; // ALS and HKTL can see all stations
+  });
 
   return (
     <Layout title="Data Initialization" subtitle="Upload Master Lists and Stock Data">
@@ -181,7 +191,7 @@ export default function DataInitialization() {
                 onChange={(e) => setSelectedStation(e.target.value)}
               >
                 <option value="">— Select Station —</option>
-                {stations.map(s => (
+                {allowedStationsForUser.map(s => (
                   <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
                 ))}
               </select>
