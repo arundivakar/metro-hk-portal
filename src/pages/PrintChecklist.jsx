@@ -56,8 +56,8 @@ export default function PrintChecklist() {
 
       // 3. Fetch asset lifecycle stats
       const { data: assetData, error: assetErr } = await supabase
-        .from('consumable_assets')
-        .select('item_id, status, quantity')
+        .from('station_inventory')
+        .select('item_id, quantity_in_use, quantity_damaged, quantity_disposed')
         .eq('station_id', selectedStation.id)
         .in('item_id', itemIds);
 
@@ -65,10 +65,11 @@ export default function PrintChecklist() {
 
       const assetMap = {};
       (assetData || []).forEach(row => {
-        if (!assetMap[row.item_id]) {
-          assetMap[row.item_id] = { in_use: 0, partially_damaged: 0, disposed: 0 };
-        }
-        assetMap[row.item_id][row.status] += Number(row.quantity);
+        assetMap[row.item_id] = { 
+          in_use: Number(row.quantity_in_use || 0), 
+          partially_damaged: Number(row.quantity_damaged || 0), 
+          disposed: Number(row.quantity_disposed || 0) 
+        };
       });
 
       // 4. Combine and Filter
