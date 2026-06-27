@@ -96,6 +96,7 @@ export const NAV_ITEMS = {
     { path: '/approvals', label: 'Approvals', icon: 'CheckSquare' },
     { path: '/assets', label: 'Asset Status', icon: 'Boxes' },
     { path: '/reports', label: 'Reports', icon: 'BarChart2' },
+    { path: '/settings', label: 'Data Import', icon: 'Database' },
   ],
   [ROLES.SC]: [
     { path: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
@@ -106,6 +107,7 @@ export const NAV_ITEMS = {
     { path: '/approvals', label: 'Approvals', icon: 'CheckSquare' },
     { path: '/assets', label: 'Asset Lifecycle', icon: 'Boxes' },
     { path: '/reports', label: 'Reports', icon: 'BarChart2' },
+    { path: '/settings', label: 'Data Import', icon: 'Database' },
   ],
   [ROLES.ALS]: [
     { path: '/dashboard', label: 'ALS Dashboard', icon: 'LayoutDashboard' },
@@ -116,6 +118,7 @@ export const NAV_ITEMS = {
     { path: '/approvals', label: 'Approvals', icon: 'CheckSquare' },
     { path: '/assets', label: 'Asset Lifecycle', icon: 'Boxes' },
     { path: '/reports', label: 'Reports', icon: 'BarChart2' },
+    { path: '/settings', label: 'Data Import', icon: 'Database' },
   ],
 };
 

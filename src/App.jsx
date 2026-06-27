@@ -19,6 +19,7 @@ import AssetLifecycle from './pages/AssetLifecycle';
 import Reports from './pages/Reports';
 import NotFound from './pages/NotFound';
 import PrintChecklist from './pages/PrintChecklist';
+import DataInitialization from './pages/DataInitialization';
 
 // Styles
 import './styles/index.css';
@@ -125,6 +126,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
               <PrintChecklist />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
+              <DataInitialization />
             </ProtectedRoute>
           }
         />

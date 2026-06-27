@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, PackagePlus, TrendingDown,
   ClipboardList, CheckSquare, Boxes, BarChart2,
-  ChevronLeft, ChevronRight, LogOut, Train,
+  ChevronLeft, ChevronRight, LogOut, Train, Database,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useStationStore } from '../../store/stationStore';
@@ -11,7 +11,7 @@ import { NAV_ITEMS, ROLES } from '../../lib/constants';
 
 const ICON_MAP = {
   LayoutDashboard, Package, PackagePlus, TrendingDown,
-  ClipboardList, CheckSquare, Boxes, BarChart2,
+  ClipboardList, CheckSquare, Boxes, BarChart2, Database,
 };
 
 function getInitials(name = '') {
