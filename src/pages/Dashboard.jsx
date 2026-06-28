@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { toDisplayValue, getDisplayUnit } from '../utils/units';
 import {
   Package, PackagePlus, TrendingDown, AlertTriangle,
   ClipboardList, Clock, Activity, Building2,
@@ -56,16 +57,28 @@ function StationDashboard({ station }) {
 
       // Merge and sort recent transactions
       const txs = [
-        ...(recentStock.data ?? []).map((r) => ({
-          id: r.id, type: 'in', item: r.inventory_items?.name ?? '—',
-          qty: `+${r.quantity} ${r.inventory_items?.unit ?? ''}`,
-          date: r.received_date, time: r.created_at,
-        })),
-        ...(recentConsumption.data ?? []).map((r) => ({
-          id: r.id, type: 'out', item: r.inventory_items?.name ?? '—',
-          qty: `-${r.quantity_used} ${r.inventory_items?.unit ?? ''}`,
-          date: r.consumption_date, time: r.created_at,
-        })),
+        ...(recentStock.data ?? []).map((r) => {
+          const dbUnit = r.inventory_items?.unit ?? 'Nos';
+          const dispUnit = getDisplayUnit(dbUnit);
+          const dispVal = toDisplayValue(r.quantity, dbUnit);
+          const qty = dispUnit === 'Nos' ? Math.round(dispVal) : dispVal.toFixed(2);
+          return {
+            id: r.id, type: 'in', item: r.inventory_items?.name ?? '—',
+            qty: `+${qty} ${dispUnit}`,
+            date: r.received_date, time: r.created_at,
+          };
+        }),
+        ...(recentConsumption.data ?? []).map((r) => {
+          const dbUnit = r.inventory_items?.unit ?? 'Nos';
+          const dispUnit = getDisplayUnit(dbUnit);
+          const dispVal = toDisplayValue(r.quantity_used, dbUnit);
+          const qty = dispUnit === 'Nos' ? Math.round(dispVal) : dispVal.toFixed(2);
+          return {
+            id: r.id, type: 'out', item: r.inventory_items?.name ?? '—',
+            qty: `-${qty} ${dispUnit}`,
+            date: r.consumption_date, time: r.created_at,
+          };
+        }),
       ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
 
       setStats({
@@ -104,13 +117,20 @@ function StationDashboard({ station }) {
     { key: 'minimum', label: 'Min Level' },
   ];
 
-  const lowStockData = lowStock.map((row) => ({
-    id: row.id,
-    item: row.inventory_items?.name ?? '—',
-    current: `${row.current_stock} ${row.inventory_items?.unit ?? ''}`,
-    minimum: `${row.inventory_items?.min_stock_level} ${row.inventory_items?.unit ?? ''}`,
-    _rowClass: 'low-stock-row',
-  }));
+  const lowStockData = lowStock.map((row) => {
+    const dbUnit   = row.inventory_items?.unit ?? 'Nos';
+    const dispUnit = getDisplayUnit(dbUnit);
+    const curDisp  = toDisplayValue(row.current_stock, dbUnit);
+    const minDisp  = toDisplayValue(row.inventory_items?.min_stock_level ?? 0, dbUnit);
+    const fmt = (v) => dispUnit === 'Nos' ? `${Math.round(v)} Nos` : `${v.toFixed(2)} ${dispUnit}`;
+    return {
+      id: row.id,
+      item: row.inventory_items?.name ?? '—',
+      current: fmt(curDisp),
+      minimum: fmt(minDisp),
+      _rowClass: 'low-stock-row',
+    };
+  });
 
   const { role } = useAuthStore();
   const isSC = role === ROLES.SC;
@@ -418,7 +438,12 @@ function ALSDashboard() {
             columns={[
               { key: 'item_name', label: 'Item Name', sortable: true },
               { key: 'category', label: 'Category' },
-              { key: 'current_stock', label: 'Quantity on Hand', render: (v, r) => `${v} ${r.unit}` },
+              { key: 'current_stock', label: 'Quantity on Hand', render: (v, r) => {
+                const dbUnit   = r.unit ?? 'Nos';
+                const dispUnit = getDisplayUnit(dbUnit);
+                const dispVal  = toDisplayValue(v, dbUnit);
+                return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+              }},
             ]}
             data={stationStock.map(r => ({ ...r, id: r.item_id }))}
             isLoading={isModalLoading}
@@ -448,7 +473,12 @@ function ALSDashboard() {
               columns={[
                 { key: 'consumption_date', label: 'Date', sortable: true },
                 { key: 'item_name', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },
-                { key: 'quantity_used', label: 'Quantity Used', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
+                { key: 'quantity_used', label: 'Quantity Used', render: (v, r) => {
+                  const dbUnit   = r.inventory_items?.unit ?? 'Nos';
+                  const dispUnit = getDisplayUnit(dbUnit);
+                  const dispVal  = toDisplayValue(v, dbUnit);
+                  return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+                }},
                 { key: 'cost', label: 'Estimated Cost', render: (_, r) => {
                   const rate = r.inventory_items?.rate_master?.unit_rate || 0;
                   return rate > 0 ? `₹${(Number(r.quantity_used) * rate).toFixed(2)}` : '—';

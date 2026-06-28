@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { formatStock, toDisplayValue, MIN_STOCK_DISPLAY } from '../utils/units';
+import { toDisplayValue, getDisplayUnit } from '../utils/units';
 import { Package, Search, AlertTriangle, ClipboardList } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
@@ -86,28 +86,30 @@ export default function Inventory() {
   }
 
   const displayData = filteredData.map((row) => {
-    const unit = row.unit ?? 'Nos';
+    const dbUnit   = row.unit ?? 'Nos';
+    const dispUnit = getDisplayUnit(dbUnit);
     const rawStock = Number(row.current_stock) || 0;
-    const displayVal = toDisplayValue(rawStock, unit);
-    const minBase = Number(row.min_stock_level) || 0;
-    const minDisplay = toDisplayValue(minBase, unit);
+    const displayVal = toDisplayValue(rawStock, dbUnit);
+    const minBase    = Number(row.min_stock_level) || 0;
+    const minDisplay = toDisplayValue(minBase, dbUnit);
     return {
       id: (role === ROLES.ALS || role === ROLES.HKTL) ? row.item_id : (row.item_id + '-' + row.station_id),
       station_code: row.station_code,
       item_name: row.item_name ?? '—',
       category: row.category ?? '—',
-      unit,
+      unit: dispUnit,
+      dbUnit,
       tender_year: row.tender_year ?? '—',
       brand_name: row.brand_name ?? '—',
       unit_rate: row.unit_rate ? `₹${row.unit_rate}` : '—',
       current_stock: displayVal,
-      current_stock_display: unit === 'Nos'
-        ? `${displayVal.toFixed(0)} Nos`
-        : `${displayVal.toFixed(2)} ${unit}`,
+      current_stock_display: dispUnit === 'Nos'
+        ? `${Math.round(displayVal)} Nos`
+        : `${displayVal.toFixed(2)} ${dispUnit}`,
       min_stock_level: minDisplay,
-      min_stock_display: unit === 'Nos'
-        ? `${minDisplay.toFixed(0)} Nos`
-        : `${minDisplay.toFixed(2)} ${unit}`,
+      min_stock_display: dispUnit === 'Nos'
+        ? `${Math.round(minDisplay)} Nos`
+        : `${minDisplay.toFixed(2)} ${dispUnit}`,
       last_updated: row.last_updated ? new Date(row.last_updated).toLocaleDateString('en-IN') : '—',
       is_low: (role === ROLES.ALS || role === ROLES.HKTL) ? false : row.is_low_stock,
       _rowClass: ((role !== ROLES.ALS && role !== ROLES.HKTL) && row.is_low_stock) ? 'low-stock-row' : '',

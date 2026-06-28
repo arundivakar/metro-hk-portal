@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { toDisplayValue } from '../utils/units';
+import { toDisplayValue, getDisplayUnit } from '../utils/units';
 import { TrendingDown, Calendar, FileText, Calculator, History, Pencil, Trash2 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -143,8 +143,9 @@ export default function StockMovement() {
       const trueOpeningStock = closingStock - (receiptsDuringMonth + initDuringMonth) + consumptionsDuringMonth;
       const visualOpeningStock = trueOpeningStock + initDuringMonth;
 
-      const unit = item.unit || 'Nos';
-      const toDisp = (v) => toDisplayValue(v, unit);
+      const dbUnit  = item.unit || 'Nos';
+      const unit     = getDisplayUnit(dbUnit);   // Ltr / Kg / Nos for display
+      const toDisp = (v) => toDisplayValue(v, dbUnit);
       const fmtDisp = (v) => {
         const dv = toDisp(v);
         return unit === 'Nos' ? `${Math.round(dv)}` : `${dv.toFixed(2)}`;
@@ -202,8 +203,9 @@ export default function StockMovement() {
     setError('');
     const finalQty = parseFloat(formQty);
     if (!finalQty || finalQty <= 0) return setError('Enter a valid quantity.');
-    // formQty is entered in display units; convert to base for storage
-    const baseQty = selectedItemForAction?.unit === 'Ltr' || selectedItemForAction?.unit === 'Kg'
+    // formQty is entered in display units (Ltr/Kg/Nos); convert to base (ml/g/Nos) for DB storage
+    const dbUnit = selectedItemForAction?.dbUnit || selectedItemForAction?.unit || 'Nos';
+    const baseQty = (dbUnit === 'ml' || dbUnit === 'g' || dbUnit === 'Ltr' || dbUnit === 'Kg')
       ? finalQty * 1000
       : finalQty;
     if (finalQty > (selectedItemForAction?.closing_stock_raw ?? 0)) return setError('Not enough stock available.');
@@ -326,10 +328,11 @@ export default function StockMovement() {
     { key: 'item', label: 'Item', render: (_, r) => items.find(i => i.id === r.item_id)?.name || 'Unknown Item' },
     { key: 'quantity', label: 'Qty Consumed', render: (_, r) => {
         const item = items.find(i => i.id === r.item_id);
-        const unit = item?.unit || '';
-        const dispVal = toDisplayValue(r.quantity_used, unit);
-        const formatted = unit === 'Nos' ? Math.round(dispVal) : dispVal.toFixed(2);
-        return `${formatted} ${unit}`;
+        const dbUnit = item?.unit || 'Nos';
+        const dispUnit = getDisplayUnit(dbUnit);
+        const dispVal = toDisplayValue(r.quantity_used, dbUnit);
+        const formatted = dispUnit === 'Nos' ? Math.round(dispVal) : dispVal.toFixed(2);
+        return `${formatted} ${dispUnit}`;
       }
     },
     { key: 'remarks', label: 'Remarks', render: (v) => v || '—' },

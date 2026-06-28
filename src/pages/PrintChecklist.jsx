@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { toDisplayValue } from '../utils/units';
+import { toDisplayValue, getDisplayUnit } from '../utils/units';
 import { supabase } from '../lib/supabase';
 import { useStationStore } from '../store/stationStore';
 
@@ -191,10 +191,24 @@ export default function PrintChecklist() {
                   <td>{item.brand_name}</td>
                   <td>{item.supplier}</td>
                   <td style={{ textAlign: 'center' }}>{item.tender_year}</td>
-                  <td style={{ textAlign: 'center' }}>{item.in_use > 0 ? (() => { const u = item.unit || 'Nos'; const v = toDisplayValue(item.in_use, u); return u === 'Nos' ? Math.round(v) : v.toFixed(2) + ' ' + u; })() : ''}</td>
-                  <td style={{ textAlign: 'center' }}>{item.partially_damaged > 0 ? (() => { const u = item.unit || 'Nos'; const v = toDisplayValue(item.partially_damaged, u); return u === 'Nos' ? Math.round(v) : v.toFixed(2) + ' ' + u; })() : ''}</td>
-                  <td style={{ textAlign: 'center' }}>{item.disposed > 0 ? (() => { const u = item.unit || 'Nos'; const v = toDisplayValue(item.disposed, u); return u === 'Nos' ? Math.round(v) : v.toFixed(2) + ' ' + u; })() : ''}</td>
-                  <td style={{ textAlign: 'center' }}>{(() => { const u = item.unit || 'Nos'; const raw = Number(item.current_stock) || 0; const v = toDisplayValue(raw, u); return (u === 'Nos' ? Math.round(v) : v.toFixed(2)) + ' ' + u; })()}</td>
+                  {/* Lifecycle columns: convert base units to display units */}
+                  {['in_use', 'partially_damaged', 'disposed'].map(field => (
+                    <td key={field} style={{ textAlign: 'center' }}>
+                      {item[field] > 0 ? (() => {
+                        const u = item.unit || 'Nos';
+                        const disp = getDisplayUnit(u);
+                        const v = toDisplayValue(item[field], u);
+                        return disp === 'Nos' ? Math.round(v) : `${v.toFixed(2)} ${disp}`;
+                      })() : ''}
+                    </td>
+                  ))}
+                  {/* Balance stock column */}
+                  <td style={{ textAlign: 'center' }}>{(() => {
+                    const u = item.unit || 'Nos';
+                    const disp = getDisplayUnit(u);
+                    const v = toDisplayValue(Number(item.current_stock) || 0, u);
+                    return disp === 'Nos' ? `${Math.round(v)} Nos` : `${v.toFixed(2)} ${disp}`;
+                  })()}</td>
                   <td style={{ textAlign: 'center' }}>
                     <div className="print-checkbox"></div>
                   </td>
