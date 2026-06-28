@@ -80,3 +80,15 @@ export function formatStock(value, unit) {
  *  Nos items       → 2
  */
 export const MIN_STOCK_BASE = { Ltr: 5000, ml: 5000, Kg: 1000, g: 1000, Nos: 2 };
+
+/**
+ * Convert a display unit label to its DB storage unit.
+ * Used when saving edit form values back to the database.
+ * @param {string} displayUnit - 'Ltr' | 'Kg' | 'Nos'
+ * @returns {string} - 'ml' | 'g' | 'Nos'
+ */
+export function toDBUnit(displayUnit) {
+  if (displayUnit === 'Ltr' || displayUnit === 'L') return 'ml';
+  if (displayUnit === 'Kg' || displayUnit === 'kg') return 'g';
+  return 'Nos';
+}

@@ -40,7 +40,7 @@ export default function DataInitialization() {
   const handleMasterUpload = async () => {
     if (isBusy.current) return;
     if (!masterFile) return setMasterError('Please select a CSV file first.');
-    if (!window.confirm('WARNING: This will wipe ALL current inventory and stock data. Are you absolutely sure?')) return;
+    if (!window.confirm('This will update master item information (rates, GST, supplier, category, unit etc.)\n\nStation stock quantities, transaction history, and all other data will be PRESERVED.\n\nOnly new items will be added. Existing items will have their pricing/details updated.\n\nContinue?')) return;
 
     isBusy.current = true;
     setMasterError('');
@@ -57,8 +57,12 @@ export default function DataInitialization() {
           const cat = (value || '').toLowerCase().trim();
           normalized['Chemical/Consumable'] = cat.includes('chemical') ? 'Chemical' : 'Consumable';
         }
-        else if (lowerKey.includes('rate')) normalized['Rate including GST'] = value;
+        else if (lowerKey === 'rate including gst' || lowerKey === 'rate incl. gst' || (lowerKey.includes('rate') && lowerKey.includes('gst'))) normalized['Rate including GST'] = value;
+        else if (lowerKey === 'base rate' || lowerKey === 'rate (ex-gst)' || lowerKey === 'basic rate') normalized['Base Rate'] = value;
+        else if (lowerKey === 'gst %' || lowerKey === 'gst%' || lowerKey === 'gst' || lowerKey === 'gst percent') normalized['GST %'] = value;
+        else if (lowerKey.includes('rate')) normalized['Rate including GST'] = value;  // fallback: any 'rate' column
         else if (lowerKey.includes('brand')) normalized['Brand'] = value;
+        else if (lowerKey.includes('supplier')) normalized['Supplier'] = value;
         else if (lowerKey.includes('tender')) normalized['Tender Year'] = value;
         else if (lowerKey === 'unit') normalized['Unit'] = value;
         else normalized[key] = value;
@@ -74,26 +78,20 @@ export default function DataInitialization() {
           const payload = results.data.map(normalizeKeys);
           console.log('Parsed master payload count:', payload.length);
           
+          // Validation: reject if this looks like the Station Stock CSV
           if (payload.length > 0) {
             const firstRow = payload[0];
-            // The Station Stock CSV has "Tender Year" and "Brand Name" but NOT "Brand" or "Rate including GST"
-            if (!('Rate including GST' in firstRow) && !('Brand' in firstRow)) {
+            if (!('Rate including GST' in firstRow) && !('Brand' in firstRow) && !('Base Rate' in firstRow)) {
               setIsWiping(false);
               isBusy.current = false;
               return setMasterError('Validation failed: This looks like the Station Stock CSV. Please upload the Master List CSV here.');
             }
           }
-          
-          // 1. Wipe database
-          console.log('Executing database wipe...');
-          const { error: wipeErr } = await supabase.rpc('fn_wipe_database');
-          if (wipeErr) throw wipeErr;
 
-          // 2. Import new list
-          console.log('[MasterUpload] Step 4 — Sending', payload.length, 'rows to Supabase RPC fn_import_master_list...');
+          // Safe UPSERT — no wipe, stock data preserved
+          console.log('[MasterUpload] Safe upsert — sending', payload.length, 'rows...');
           const { error: importErr } = await supabase.rpc('fn_import_master_list', { p_payload: payload });
           if (importErr) throw importErr;
-          console.log('[MasterUpload] Step 4 — RPC returned without error.');
 
           // 3. Verify final count in DB
           const { count: finalCount } = await supabase.from('inventory_items').select('*', { count: 'exact', head: true });
