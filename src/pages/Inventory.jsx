@@ -19,6 +19,9 @@ import toast from 'react-hot-toast';
 export default function Inventory() {
   const { role } = useAuthStore();
   const { selectedStation, alsGroupFilter } = useStationStore();
+
+  // Edit permission: HKTL role OR SC user at PNCU station
+  const canEditMaster = role === ROLES.HKTL || (role === ROLES.SC && selectedStation?.code === 'PNCU');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [allStationsInventory, setAllStationsInventory] = useState([]);
@@ -250,8 +253,8 @@ export default function Inventory() {
       key: 'min_stock_level', label: 'Min Level',
       render: (v, row) => v > 0 ? row.min_stock_display : '—',
     },
-    // Edit button — ALS only
-    ...(role === ROLES.ALS ? [{
+    // Edit button — HKTL and SC at PNCU only
+    ...(canEditMaster ? [{
       key: 'edit', label: 'Edit',
       render: (_, row) => (
         <button

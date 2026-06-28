@@ -51,20 +51,33 @@ export default function DataInitialization() {
       const normalized = {};
       for (const [key, value] of Object.entries(row)) {
         if (!key) continue;
-        const lowerKey = key.toLowerCase().trim();
-        if (lowerKey.includes('cleaning material') || lowerKey === 'item name' || lowerKey === 'name') normalized['Cleaning Material'] = value;
+        const lowerKey = key.toLowerCase().trim().replace(/\s+/g, ' ');
+        if (lowerKey.includes('cleaning material') || lowerKey === 'item name' || lowerKey === 'name') {
+          normalized['Cleaning Material'] = value;
+        }
         else if (lowerKey.includes('chemical') || lowerKey === 'category') {
           const cat = (value || '').toLowerCase().trim();
           normalized['Chemical/Consumable'] = cat.includes('chemical') ? 'Chemical' : 'Consumable';
         }
-        else if (lowerKey === 'rate including gst' || lowerKey === 'rate incl. gst' || (lowerKey.includes('rate') && lowerKey.includes('gst'))) normalized['Rate including GST'] = value;
-        else if (lowerKey === 'base rate' || lowerKey === 'rate (ex-gst)' || lowerKey === 'basic rate') normalized['Base Rate'] = value;
-        else if (lowerKey === 'gst %' || lowerKey === 'gst%' || lowerKey === 'gst' || lowerKey === 'gst percent') normalized['GST %'] = value;
-        else if (lowerKey.includes('rate')) normalized['Rate including GST'] = value;  // fallback: any 'rate' column
-        else if (lowerKey.includes('brand')) normalized['Brand'] = value;
+        // Exact column names from the master CSV
+        else if (lowerKey === 'final_rate' || lowerKey === 'final rate') {
+          normalized['Rate including GST'] = value;
+        }
+        else if (lowerKey === 'base_rate' || lowerKey === 'base rate' || lowerKey === 'rate (ex-gst)' || lowerKey === 'basic rate') {
+          normalized['Base Rate'] = value;
+        }
+        else if (lowerKey === 'gst_percentage' || lowerKey === 'gst%' || lowerKey === 'gst %' || lowerKey === 'gst percent' || lowerKey === 'gst') {
+          normalized['GST %'] = value;
+        }
+        // Fallback: any 'rate' column → Rate including GST
+        else if (lowerKey.includes('rate') && lowerKey.includes('gst')) normalized['Rate including GST'] = value;
+        else if (lowerKey.includes('rate')) normalized['Rate including GST'] = value;
+        else if (lowerKey.includes('brand'))    normalized['Brand'] = value;
         else if (lowerKey.includes('supplier')) normalized['Supplier'] = value;
-        else if (lowerKey.includes('tender')) normalized['Tender Year'] = value;
-        else if (lowerKey === 'unit') normalized['Unit'] = value;
+        else if (lowerKey.includes('tender'))   normalized['Tender Year'] = value;
+        else if (lowerKey === 'unit')           normalized['Unit'] = value;
+        // Skip serial number columns
+        else if (lowerKey === 'sl. no' || lowerKey === 'sl.no' || lowerKey === 'sl no' || lowerKey === 's.no') { /* skip */ }
         else normalized[key] = value;
       }
       return normalized;
@@ -79,9 +92,10 @@ export default function DataInitialization() {
           console.log('Parsed master payload count:', payload.length);
           
           // Validation: reject if this looks like the Station Stock CSV
+          // Master CSV must have at least Brand or Supplier column
           if (payload.length > 0) {
             const firstRow = payload[0];
-            if (!('Rate including GST' in firstRow) && !('Brand' in firstRow) && !('Base Rate' in firstRow)) {
+            if (!('Brand' in firstRow) && !('Supplier' in firstRow) && !('Rate including GST' in firstRow) && !('Base Rate' in firstRow)) {
               setIsWiping(false);
               isBusy.current = false;
               return setMasterError('Validation failed: This looks like the Station Stock CSV. Please upload the Master List CSV here.');
