@@ -2,6 +2,30 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ALS_GROUPS } from './constants';
 
+/**
+ * Convert raw base-unit quantity to billing quantity.
+ * Items are stored in ml/g/Nos in the DB.
+ * Bills are expressed in Ltr/Kg/Nos (or Kg for nos_per_kg items).
+ *
+ *  ml  → divide by 1000 → Ltr
+ *  g   → divide by 1000 → Kg
+ *  Nos with nos_per_kg → divide by nos_per_kg → Kg (e.g. garbage covers)
+ *  Nos without nos_per_kg → 1:1 → Nos
+ */
+function toBillingQty(rawQty, dbUnit, nosPerKg) {
+  if (dbUnit === 'ml') return rawQty / 1000;              // ml → Ltr
+  if (dbUnit === 'g')  return rawQty / 1000;              // g  → Kg
+  if (nosPerKg && nosPerKg > 0) return rawQty / nosPerKg; // Nos → Kg (garbage covers etc.)
+  return rawQty;                                           // Nos → Nos
+}
+
+function billingUnitLabel(dbUnit, nosPerKg) {
+  if (dbUnit === 'ml') return 'Ltr';
+  if (dbUnit === 'g')  return 'Kg';
+  if (nosPerKg && nosPerKg > 0) return 'Kg';
+  return 'Nos';
+}
+
 export const generateMonthlyBillPdf = async (month, year, consumptionData, allItems = []) => {
   const doc = new jsPDF('landscape');
   
@@ -17,7 +41,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
   doc.text('Revision No: 01', doc.internal.pageSize.getWidth() - 15, 15, { align: 'right' });
   doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, doc.internal.pageSize.getWidth() - 15, 20, { align: 'right' });
 
-  // Add Logo
+  // Logo
   try {
     const response = await fetch('/kmrl_logo.png');
     const blob = await response.blob();
@@ -26,22 +50,20 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
       reader.onloadend = () => resolve(reader.result);
       reader.readAsDataURL(blob);
     });
-    // Adjust x, y, width, height for the logo
-    // Let's place it at top-left
     doc.addImage(base64data, 'PNG', 14, 5, 20, 20);
   } catch (err) {
     console.warn('Failed to load logo for PDF', err);
   }
 
   // Subtitle banner
-  doc.setFillColor(0, 150, 136); // Teal
+  doc.setFillColor(0, 150, 136);
   doc.rect(14, 25, doc.internal.pageSize.getWidth() - 28, 8, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Cleaning Material Consumption (Stations)', doc.internal.pageSize.getWidth() / 2, 31, { align: 'center' });
 
-  // Month
+  // Month banner
   doc.setFillColor(0, 150, 136);
   doc.rect(14, 33, doc.internal.pageSize.getWidth() - 28, 8, 'F');
   const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long' }).toUpperCase();
@@ -50,16 +72,20 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
   
   doc.setTextColor(0, 0, 0);
 
-  // Group data by Item
+  // ─── Build item map ─────────────────────────────────────────────────────────
   const groupedItems = {};
-  
-  // First, initialize all available items in the system
+
+  // Initialise every active master item (ensures all 149 appear even with 0 consumption)
   allItems.forEach(item => {
+    const dbUnit   = item.unit || 'Nos';
+    const nosPerKg = item.rate_master?.nos_per_kg || null;
     groupedItems[item.name] = {
-      name: item.name,
-      brand: item.rate_master?.brand || 'ORDINARY',
-      supplier: 'Tricuesta',
-      rate: Number(item.rate_master?.unit_rate || 0),
+      name:      item.name,
+      brand:     item.rate_master?.brand    || 'ORDINARY',
+      supplier:  item.rate_master?.supplier || 'Tricuesta',
+      rate:      Number(item.rate_master?.unit_rate || 0),
+      dbUnit,
+      nosPerKg,
       'ALVA-KLMT': 0,
       'CCUV-JLSD': 0,
       'KALR-KVTR': 0,
@@ -67,98 +93,109 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     };
   });
 
-  // Then add the consumption data
+  // Accumulate raw base-unit consumption by ALS group
   consumptionData.forEach(log => {
-    const itemName = log.inventory_items?.name || 'Unknown';
+    const itemName   = log.inventory_items?.name || 'Unknown';
     const stationCode = log.stations?.code;
-    const qty = Number(log.quantity_used || 0);
-    
-    // If an item was consumed but wasn't in allItems for some reason, initialize it
+    const qty        = Number(log.quantity_used || 0);
+
+    // Ensure the item exists (consumed items not in master — shouldn't happen but safe)
     if (!groupedItems[itemName]) {
+      const dbUnit   = log.inventory_items?.unit || 'Nos';
+      const nosPerKg = log.inventory_items?.rate_master?.nos_per_kg || null;
       groupedItems[itemName] = {
-        name: itemName,
-        brand: log.inventory_items?.rate_master?.brand || 'ORDINARY',
-        supplier: 'Tricuesta',
-        rate: Number(log.inventory_items?.rate_master?.unit_rate || 0),
+        name:     itemName,
+        brand:    log.inventory_items?.rate_master?.brand    || 'ORDINARY',
+        supplier: log.inventory_items?.rate_master?.supplier || 'Tricuesta',
+        rate:     Number(log.inventory_items?.rate_master?.unit_rate || 0),
+        dbUnit,
+        nosPerKg,
         'ALVA-KLMT': 0,
         'CCUV-JLSD': 0,
         'KALR-KVTR': 0,
         'EMKM-TPHT': 0,
       };
     }
-    
-    // Assign qty to correct group
-    if (ALS_GROUPS['ALVA-KLMT'].includes(stationCode)) groupedItems[itemName]['ALVA-KLMT'] += qty;
+
+    if      (ALS_GROUPS['ALVA-KLMT'].includes(stationCode)) groupedItems[itemName]['ALVA-KLMT'] += qty;
     else if (ALS_GROUPS['CCUV-JLSD'].includes(stationCode)) groupedItems[itemName]['CCUV-JLSD'] += qty;
     else if (ALS_GROUPS['KALR-KVTR'].includes(stationCode)) groupedItems[itemName]['KALR-KVTR'] += qty;
     else if (ALS_GROUPS['EMKM-TPHT'].includes(stationCode)) groupedItems[itemName]['EMKM-TPHT'] += qty;
   });
 
-  // Convert to table rows
+  // ─── Build PDF table rows ────────────────────────────────────────────────────
   let totalALVA = 0, totalCCUV = 0, totalKALR = 0, totalEMKM = 0, grandTotal = 0;
-  
+
   const tableData = Object.values(groupedItems).map((item, index) => {
-    const itemTotalQty = item['ALVA-KLMT'] + item['CCUV-JLSD'] + item['KALR-KVTR'] + item['EMKM-TPHT'];
-    const itemAmount = itemTotalQty * item.rate;
-    
-    // Add to sums
-    totalALVA += item['ALVA-KLMT'] * item.rate;
-    totalCCUV += item['CCUV-JLSD'] * item.rate;
-    totalKALR += item['KALR-KVTR'] * item.rate;
-    totalEMKM += item['EMKM-TPHT'] * item.rate;
-    grandTotal += itemAmount;
+    const { dbUnit, nosPerKg, rate } = item;
+
+    // Convert each group's raw qty to billing qty
+    const alvaQty = toBillingQty(item['ALVA-KLMT'], dbUnit, nosPerKg);
+    const ccuvQty = toBillingQty(item['CCUV-JLSD'], dbUnit, nosPerKg);
+    const kalrQty = toBillingQty(item['KALR-KVTR'], dbUnit, nosPerKg);
+    const emkmQty = toBillingQty(item['EMKM-TPHT'], dbUnit, nosPerKg);
+
+    const totalQty = alvaQty + ccuvQty + kalrQty + emkmQty;
+    const amount   = totalQty * rate;
+
+    totalALVA += alvaQty * rate;
+    totalCCUV += ccuvQty * rate;
+    totalKALR += kalrQty * rate;
+    totalEMKM += emkmQty * rate;
+    grandTotal += amount;
+
+    const fmt  = (v) => v === 0 ? '' : v.toFixed(3).replace(/\.?0+$/, ''); // compact: "1.5" not "1.500"
 
     return [
       index + 1,
       item.name,
       item.brand,
       item.supplier,
-      item.rate.toFixed(2),
-      item['ALVA-KLMT'] || 0,
-      item['CCUV-JLSD'] || 0,
-      item['KALR-KVTR'] || 0,
-      item['EMKM-TPHT'] || 0,
-      itemTotalQty.toFixed(2),
-      itemAmount.toFixed(2)
+      `${rate.toFixed(2)} / ${billingUnitLabel(dbUnit, nosPerKg)}`,
+      fmt(alvaQty),
+      fmt(ccuvQty),
+      fmt(kalrQty),
+      fmt(emkmQty),
+      fmt(totalQty),
+      amount > 0 ? amount.toFixed(2) : '',
     ];
   });
 
-  // Footer row
+  // Footer totals row
   tableData.push([
     { content: 'TOTAL', colSpan: 5, styles: { halign: 'center', fontStyle: 'bold' } },
     totalALVA.toFixed(2),
     totalCCUV.toFixed(2),
     totalKALR.toFixed(2),
     totalEMKM.toFixed(2),
-    '', // Empty for quantity total
-    grandTotal.toFixed(2)
+    '',
+    grandTotal.toFixed(2),
   ]);
 
   autoTable(doc, {
     startY: 41,
-    head: [['Sl.\nNo', 'Cleaning Material', 'Brand', 'Supplier', 'Rate', 'ALVA-KLMT', 'CCUV-JLSD', 'KALR-KVTR', 'EMKM-TPHT', 'Total', 'Amount']],
+    head: [['Sl.\nNo', 'Cleaning Material', 'Brand', 'Supplier', 'Rate', 'ALVA-KLMT', 'CCUV-JLSD', 'KALR-KVTR', 'EMKM-TPHT', 'Total', 'Amount (₹)']],
     body: tableData,
     theme: 'grid',
     headStyles: { fillColor: [0, 150, 136], textColor: 255, halign: 'center', valign: 'middle' },
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 7.5, cellPadding: 2 },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 10 },
-      1: { cellWidth: 40 },
-      4: { halign: 'right' },
-      5: { halign: 'center' },
-      6: { halign: 'center' },
-      7: { halign: 'center' },
-      8: { halign: 'center' },
-      9: { halign: 'center' },
-      10: { halign: 'right', fontStyle: 'bold' }
+      0:  { halign: 'center', cellWidth: 8 },
+      1:  { cellWidth: 38 },
+      4:  { halign: 'right', cellWidth: 22 },
+      5:  { halign: 'center' },
+      6:  { halign: 'center' },
+      7:  { halign: 'center' },
+      8:  { halign: 'center' },
+      9:  { halign: 'center' },
+      10: { halign: 'right', fontStyle: 'bold' },
     },
     didDrawCell: (data) => {
-      // Bold the last row
       if (data.row.index === tableData.length - 1) {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [240, 240, 240];
+        data.cell.styles.fontStyle    = 'bold';
+        data.cell.styles.fillColor    = [240, 240, 240];
       }
-    }
+    },
   });
 
   doc.save(`KMRL_Consumption_Bill_${monthName}_${year}.pdf`);

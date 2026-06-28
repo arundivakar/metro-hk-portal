@@ -34,7 +34,7 @@ export default function Inventory() {
   const [editForm, setEditForm] = useState({
     itemId: '', rmId: '', itemName: '', category: 'Consumable',
     unit: 'Nos', brand: '', supplier: '', tenderYear: '',
-    gstPercent: '', baseRate: '', rateInclGST: '',
+    gstPercent: '', baseRate: '', rateInclGST: '', nosPerKg: '',
   });
 
   const { inventory, isLoading, fetchInventory, getLowStockItems } = useInventory(
@@ -71,7 +71,7 @@ export default function Inventory() {
     try {
       const { data, error } = await supabase
         .from('inventory_items')
-        .select('id, name, category, unit, rate_master(id, item_name, brand, supplier, tender_year, unit_rate, base_rate, gst_percent, category)')
+        .select('id, name, category, unit, rate_master(id, item_name, brand, supplier, tender_year, unit_rate, base_rate, gst_percent, nos_per_kg, category)')
         .eq('id', itemId)
         .single();
       if (error || !data) throw error || new Error('Item not found');
@@ -86,9 +86,10 @@ export default function Inventory() {
         brand:      rm.brand || '',
         supplier:   rm.supplier || '',
         tenderYear: rm.tender_year || '',
-        gstPercent: rm.gst_percent != null ? String(rm.gst_percent) : '',
-        baseRate:   rm.base_rate   != null ? String(rm.base_rate)   : '',
-        rateInclGST: rm.unit_rate  != null ? String(rm.unit_rate)   : '',
+        gstPercent:  rm.gst_percent != null ? String(rm.gst_percent) : '',
+        baseRate:    rm.base_rate   != null ? String(rm.base_rate)   : '',
+        rateInclGST: rm.unit_rate   != null ? String(rm.unit_rate)   : '',
+        nosPerKg:    rm.nos_per_kg  != null ? String(rm.nos_per_kg)  : '',
       });
       setEditingItem(true);
     } catch (err) {
@@ -135,6 +136,7 @@ export default function Inventory() {
           gst_percent: Number(editForm.gstPercent) || 0,
           base_rate:   Number(editForm.baseRate)   || 0,
           unit_rate:   Number(editForm.rateInclGST) || 0,
+          nos_per_kg:  editForm.nosPerKg !== '' ? Number(editForm.nosPerKg) : null,
           updated_at:  new Date().toISOString(),
         })
         .eq('id', editForm.rmId);
@@ -445,7 +447,30 @@ export default function Inventory() {
               This is the rate used for billing (per {editForm.unit})
             </small>
           </div>
+
+          {/* Nos per Kg — only for Nos items billed by weight (e.g. garbage covers) */}
+          {editForm.unit === 'Nos' && (
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label">Nos per Kg <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(only for items billed by weight)</span></label>
+              <input
+                type="number"
+                step="1"
+                min="1"
+                className="form-control"
+                placeholder="Leave blank if billed per piece (Nos)"
+                value={editForm.nosPerKg}
+                onChange={e => handleEditChange('nosPerKg', e.target.value)}
+                style={{ maxWidth: 240 }}
+              />
+              <small style={{ color: 'var(--color-text-muted)' }}>
+                {editForm.nosPerKg
+                  ? `Billing: ${editForm.nosPerKg} pieces = 1 Kg → Rate ₹${editForm.rateInclGST || '?'}/Kg`
+                  : 'Example: Small garbage cover = 30 (30 Nos = 1 Kg at ₹45/Kg), Big = 10'}
+              </small>
+            </div>
+          )}
         </div>
+
       </Modal>
     </Layout>
   );

@@ -105,12 +105,14 @@ export function useInventory(stationId) {
   const fetchInventoryItems = useCallback(async () => {
     const { data, error: err } = await supabase
       .from('inventory_items')
-      .select('*, rate_master ( unit_rate, tender_year, brand )')
+      .select('*, rate_master ( unit_rate, tender_year, brand, supplier, nos_per_kg )')
       .eq('is_active', true)
+      .limit(1000)   // explicit safeguard — Supabase default can be lower
       .order('name');
     if (err) throw err;
     return data ?? [];
   }, []);
+
 
   // Add a new item to rate_master (triggers auto-creation of inventory_items)
   const addNewCatalogueItem = useCallback(async (payload) => {

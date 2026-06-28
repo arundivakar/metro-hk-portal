@@ -281,15 +281,26 @@ export default function StockMovement() {
       const startDate = `${year}-${month}-01`;
       const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
+      // Fresh fetch of ALL active items — explicit limit avoids Supabase row cap
+      const { data: allItemsData, error: itemsErr } = await supabase
+        .from('inventory_items')
+        .select('*, rate_master ( unit_rate, tender_year, brand, supplier, nos_per_kg )')
+        .eq('is_active', true)
+        .limit(1000)
+        .order('name');
+      if (itemsErr) throw itemsErr;
+
+      // Fetch all consumption logs for the selected month across all stations
       const { data, error } = await supabase
         .from('consumption_logs')
-        .select('*, inventory_items(name, rate_master(brand, unit_rate)), stations(code)')
+        .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg)), stations(code)')
         .gte('consumption_date', startDate)
-        .lte('consumption_date', endDate);
+        .lte('consumption_date', endDate)
+        .limit(5000);
 
       if (error) throw error;
 
-      await generateMonthlyBillPdf(month, year, data || [], items);
+      await generateMonthlyBillPdf(month, year, data || [], allItemsData || []);
       setShowBillModal(false);
       toast.success('Monthly Bill generated successfully!');
     } catch (err) {
@@ -299,6 +310,7 @@ export default function StockMovement() {
       setGeneratingPdf(false);
     }
   };
+
 
   const columns = [
     { key: 'sl_no', label: 'Sl. No', render: (v) => <span style={{ color: 'var(--color-gray-500)' }}>{v}</span> },
