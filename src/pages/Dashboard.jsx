@@ -144,8 +144,8 @@ function StationDashboard({ station }) {
             <div>
               <strong>Action Required:</strong> Today is the scheduled day for Stock Verification. Please generate the checklist and verify physical stock.
             </div>
-            <Button variant="primary" onClick={() => window.open('/print-checklist', '_blank')}>
-              Generate Checklist
+            <Button variant="primary" onClick={() => window.open('/stock-verification', '_blank')}>
+              Start Verification
             </Button>
           </div>
         </Alert>
@@ -162,8 +162,8 @@ function StationDashboard({ station }) {
           </div>
           {isSC && (
             <div style={{ marginTop: '1rem' }}>
-              <Button variant="outline" onClick={() => window.open('/print-checklist', '_blank')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
-                <ClipboardList size={16} /> Print Verification Checklist
+              <Button variant="outline" onClick={() => window.open('/stock-verification', '_blank')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
+                <ClipboardList size={16} /> Digital Stock Verification
               </Button>
             </div>
           )}

@@ -122,7 +122,7 @@ export default function App() {
         />
 
         <Route
-          path="/print-checklist"
+          path="/stock-verification"
           element={
             <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
               <PrintChecklist />

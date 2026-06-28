@@ -308,8 +308,8 @@ export default function Inventory() {
           subtitle={`${displayData.length} items`}
           action={
             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-              <Button variant="outline" onClick={() => window.open('/print-checklist', '_blank')}>
-                <ClipboardList size={14} /> Print Verification Checklist
+              <Button variant="outline" onClick={() => window.open('/stock-verification', '_blank')}>
+                <ClipboardList size={14} /> Digital Stock Verification
               </Button>
             </div>
           }
