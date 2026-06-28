@@ -227,6 +227,24 @@ export default function Inventory() {
     };
   });
 
+  // Sort display data: Normal Stock > Low Stock > Zero Stock, then alphabetical
+  displayData.sort((a, b) => {
+    const getStockLevel = (item) => {
+      if (item.current_stock <= 0) return 0; // Zero stock
+      if (item.is_low) return 1;             // Low stock
+      return 2;                              // Normal stock
+    };
+    
+    const levelA = getStockLevel(a);
+    const levelB = getStockLevel(b);
+    
+    if (levelA !== levelB) {
+      return levelB - levelA; // 2 -> 1 -> 0
+    }
+    
+    return (a.item_name || '').localeCompare(b.item_name || '');
+  });
+
   const lowStockCount = (role === ROLES.ALS || role === ROLES.HKTL) ? 0 : displayData.filter((r) => r.is_low).length;
 
   const stationCodes = (role === ROLES.ALS || role === ROLES.HKTL)
