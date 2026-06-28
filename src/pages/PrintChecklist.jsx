@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { toDisplayValue } from '../utils/units';
 import { supabase } from '../lib/supabase';
 import { useStationStore } from '../store/stationStore';
 
@@ -25,7 +26,7 @@ export default function PrintChecklist() {
       // 1. Fetch inventory items and balance stock
       const { data: invData, error: invErr } = await supabase
         .from('v_station_inventory_summary')
-        .select('item_id, item_name, category, tender_year, brand_name, current_stock')
+        .select('item_id, item_name, category, unit, tender_year, brand_name, current_stock')
         .eq('station_id', selectedStation.id)
         .order('tender_year', { ascending: false, nullsFirst: false });
 
@@ -162,7 +163,7 @@ export default function PrintChecklist() {
             <th rowSpan="2">Supplier</th>
             <th rowSpan="2" style={{ width: '80px' }}>Tender Year</th>
             <th colSpan="3" style={{ textAlign: 'center' }}>Consumables</th>
-            <th rowSpan="2" style={{ width: '80px' }}>Balance Stock</th>
+            <th rowSpan="2" style={{ width: '80px' }}>Balance Stock (Ltr / Kg / Nos)</th>
             <th rowSpan="2" style={{ width: '60px' }}>Verified</th>
             <th rowSpan="2" style={{ width: '150px' }}>Remarks</th>
           </tr>
@@ -190,10 +191,10 @@ export default function PrintChecklist() {
                   <td>{item.brand_name}</td>
                   <td>{item.supplier}</td>
                   <td style={{ textAlign: 'center' }}>{item.tender_year}</td>
-                  <td style={{ textAlign: 'center' }}>{item.in_use > 0 ? item.in_use : ''}</td>
-                  <td style={{ textAlign: 'center' }}>{item.partially_damaged > 0 ? item.partially_damaged : ''}</td>
-                  <td style={{ textAlign: 'center' }}>{item.disposed > 0 ? item.disposed : ''}</td>
-                  <td style={{ textAlign: 'center' }}>{Number(item.current_stock).toFixed(2).replace(/\.00$/, '')}</td>
+                  <td style={{ textAlign: 'center' }}>{item.in_use > 0 ? (() => { const u = item.unit || 'Nos'; const v = toDisplayValue(item.in_use, u); return u === 'Nos' ? Math.round(v) : v.toFixed(2) + ' ' + u; })() : ''}</td>
+                  <td style={{ textAlign: 'center' }}>{item.partially_damaged > 0 ? (() => { const u = item.unit || 'Nos'; const v = toDisplayValue(item.partially_damaged, u); return u === 'Nos' ? Math.round(v) : v.toFixed(2) + ' ' + u; })() : ''}</td>
+                  <td style={{ textAlign: 'center' }}>{item.disposed > 0 ? (() => { const u = item.unit || 'Nos'; const v = toDisplayValue(item.disposed, u); return u === 'Nos' ? Math.round(v) : v.toFixed(2) + ' ' + u; })() : ''}</td>
+                  <td style={{ textAlign: 'center' }}>{(() => { const u = item.unit || 'Nos'; const raw = Number(item.current_stock) || 0; const v = toDisplayValue(raw, u); return (u === 'Nos' ? Math.round(v) : v.toFixed(2)) + ' ' + u; })()}</td>
                   <td style={{ textAlign: 'center' }}>
                     <div className="print-checkbox"></div>
                   </td>

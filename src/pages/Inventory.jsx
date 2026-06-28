@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatStock, toDisplayValue, MIN_STOCK_DISPLAY } from '../utils/units';
 import { Package, Search, AlertTriangle, ClipboardList } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
@@ -84,21 +85,34 @@ export default function Inventory() {
     filteredData = Object.values(grouped);
   }
 
-  const displayData = filteredData.map((row) => ({
-    id: (role === ROLES.ALS || role === ROLES.HKTL) ? row.item_id : (row.item_id + '-' + row.station_id),
-    station_code: row.station_code,
-    item_name: row.item_name ?? '—',
-    category: row.category ?? '—',
-    unit: row.unit ?? '—',
-    tender_year: row.tender_year ?? '—',
-    brand_name: row.brand_name ?? '—',
-    unit_rate: row.unit_rate ? `₹${row.unit_rate}` : '—',
-    current_stock: Number(row.current_stock).toFixed(2).replace(/\.00$/, ''),
-    min_stock_level: row.min_stock_level ?? 0,
-    last_updated: row.last_updated ? new Date(row.last_updated).toLocaleDateString('en-IN') : '—',
-    is_low: (role === ROLES.ALS || role === ROLES.HKTL) ? false : row.is_low_stock, // Disable low stock highlighting for aggregated ALS view
-    _rowClass: ((role !== ROLES.ALS && role !== ROLES.HKTL) && row.is_low_stock) ? 'low-stock-row' : '',
-  }));
+  const displayData = filteredData.map((row) => {
+    const unit = row.unit ?? 'Nos';
+    const rawStock = Number(row.current_stock) || 0;
+    const displayVal = toDisplayValue(rawStock, unit);
+    const minBase = Number(row.min_stock_level) || 0;
+    const minDisplay = toDisplayValue(minBase, unit);
+    return {
+      id: (role === ROLES.ALS || role === ROLES.HKTL) ? row.item_id : (row.item_id + '-' + row.station_id),
+      station_code: row.station_code,
+      item_name: row.item_name ?? '—',
+      category: row.category ?? '—',
+      unit,
+      tender_year: row.tender_year ?? '—',
+      brand_name: row.brand_name ?? '—',
+      unit_rate: row.unit_rate ? `₹${row.unit_rate}` : '—',
+      current_stock: displayVal,
+      current_stock_display: unit === 'Nos'
+        ? `${displayVal.toFixed(0)} Nos`
+        : `${displayVal.toFixed(2)} ${unit}`,
+      min_stock_level: minDisplay,
+      min_stock_display: unit === 'Nos'
+        ? `${minDisplay.toFixed(0)} Nos`
+        : `${minDisplay.toFixed(2)} ${unit}`,
+      last_updated: row.last_updated ? new Date(row.last_updated).toLocaleDateString('en-IN') : '—',
+      is_low: (role === ROLES.ALS || role === ROLES.HKTL) ? false : row.is_low_stock,
+      _rowClass: ((role !== ROLES.ALS && role !== ROLES.HKTL) && row.is_low_stock) ? 'low-stock-row' : '',
+    };
+  });
 
   const lowStockCount = (role === ROLES.ALS || role === ROLES.HKTL) ? 0 : displayData.filter((r) => r.is_low).length;
 
@@ -120,14 +134,14 @@ export default function Inventory() {
       key: 'current_stock', label: 'Current Stock', sortable: true,
       render: (v, row) => (
         <span style={{ fontWeight: 600, color: row.is_low ? 'var(--color-warning-600)' : 'var(--color-success-600)' }}>
-          {v} {row.unit}
+          {row.current_stock_display}
           {row.is_low && <AlertTriangle size={12} style={{ marginLeft: 6, display: 'inline' }} />}
         </span>
       ),
     },
     {
       key: 'min_stock_level', label: 'Min Level',
-      render: (v, row) => v > 0 ? `${v} ${row.unit}` : '—',
+      render: (v, row) => v > 0 ? row.min_stock_display : '—',
     },
   ];
 

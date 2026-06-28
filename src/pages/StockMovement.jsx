@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { toDisplayValue } from '../utils/units';
 import { TrendingDown, Calendar, FileText, Calculator, History, Pencil, Trash2 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -142,17 +143,25 @@ export default function StockMovement() {
       const trueOpeningStock = closingStock - (receiptsDuringMonth + initDuringMonth) + consumptionsDuringMonth;
       const visualOpeningStock = trueOpeningStock + initDuringMonth;
 
+      const unit = item.unit || 'Nos';
+      const toDisp = (v) => toDisplayValue(v, unit);
+      const fmtDisp = (v) => {
+        const dv = toDisp(v);
+        return unit === 'Nos' ? `${Math.round(dv)}` : `${dv.toFixed(2)}`;
+      };
+
       return {
         id: item.id,
         item_name: item.name,
         brand: item.rate_master?.brand || 'ORDINARY',
         supplier: 'Tricuesta',
         tender_year: item.rate_master?.tender_year || '2024-25',
-        unit: item.unit,
-        opening_stock: visualOpeningStock > 0 ? visualOpeningStock : 0,
-        received_transferred: receiptsDuringMonth,
-        consumption: consumptionsDuringMonth,
-        closing_stock: closingStock > 0 ? closingStock : 0
+        unit,
+        opening_stock: fmtDisp(visualOpeningStock > 0 ? visualOpeningStock : 0),
+        received_transferred: fmtDisp(receiptsDuringMonth),
+        consumption: fmtDisp(consumptionsDuringMonth),
+        closing_stock: fmtDisp(closingStock > 0 ? closingStock : 0),
+        closing_stock_raw: toDisp(closingStock > 0 ? closingStock : 0),
       };
     });
 
@@ -193,14 +202,18 @@ export default function StockMovement() {
     setError('');
     const finalQty = parseFloat(formQty);
     if (!finalQty || finalQty <= 0) return setError('Enter a valid quantity.');
-    if (finalQty > selectedItemForAction.closing_stock) return setError('Not enough stock available.');
+    // formQty is entered in display units; convert to base for storage
+    const baseQty = selectedItemForAction?.unit === 'Ltr' || selectedItemForAction?.unit === 'Kg'
+      ? finalQty * 1000
+      : finalQty;
+    if (finalQty > (selectedItemForAction?.closing_stock_raw ?? 0)) return setError('Not enough stock available.');
 
     setSubmitting(true);
     try {
       await logConsumption({
         station_id: selectedStation.id,
         item_id: selectedItemForAction.id,
-        quantity_used: finalQty,
+        quantity_used: baseQty,
         consumption_date: formDate,
         remarks: formRemarks || null,
         logged_by: profile.id,
@@ -291,10 +304,10 @@ export default function StockMovement() {
     { key: 'brand', label: 'Brand' },
     { key: 'supplier', label: 'Supplier' },
     { key: 'tender_year', label: 'Tender Year', width: 100, render: (v) => <span style={{ whiteSpace: 'nowrap' }}>{v}</span> },
-    { key: 'opening_stock', label: 'Opening Stock', render: (v) => Number(v).toFixed(2) },
-    { key: 'received_transferred', label: 'Received / Transferred', width: 120, render: (v) => Number(v).toFixed(2) },
-    { key: 'consumption', label: 'Consumption this month', render: (v) => Number(v).toFixed(2) },
-    { key: 'closing_stock', label: 'Closing Stock', render: (v) => <strong>{Number(v).toFixed(2)}</strong> },
+    { key: 'opening_stock',        label: 'Opening Stock',            render: (v, row) => `${v} ${row.unit}` },
+    { key: 'received_transferred', label: 'Received / Transferred', width: 120, render: (v, row) => `${v} ${row.unit}` },
+    { key: 'consumption',          label: 'Consumption this month',  render: (v, row) => `${v} ${row.unit}` },
+    { key: 'closing_stock',        label: 'Closing Stock',           render: (v, row) => <strong style={{ color: Number(row.closing_stock_raw) === 0 ? 'var(--color-danger-600)' : 'inherit' }}>{v} {row.unit}</strong> },
     ...(role === ROLES.SC ? [{
       key: 'actions', label: 'Actions', render: (_, row) => (
         <Button variant="outline" onClick={() => {
@@ -313,7 +326,10 @@ export default function StockMovement() {
     { key: 'item', label: 'Item', render: (_, r) => items.find(i => i.id === r.item_id)?.name || 'Unknown Item' },
     { key: 'quantity', label: 'Qty Consumed', render: (_, r) => {
         const item = items.find(i => i.id === r.item_id);
-        return `${r.quantity_used} ${item?.unit || ''}`;
+        const unit = item?.unit || '';
+        const dispVal = toDisplayValue(r.quantity_used, unit);
+        const formatted = unit === 'Nos' ? Math.round(dispVal) : dispVal.toFixed(2);
+        return `${formatted} ${unit}`;
       }
     },
     { key: 'remarks', label: 'Remarks', render: (v) => v || '—' },
