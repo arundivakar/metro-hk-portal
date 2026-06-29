@@ -13,14 +13,14 @@ import { ALS_GROUPS } from './constants';
  *  Nos with nos_per_kg → divide by nos_per_kg → Kg (e.g. garbage covers)
  *  Nos without nos_per_kg → 1:1 → Nos
  */
-function toBillingQty(rawQty, dbUnit, nosPerKg) {
+export function toBillingQty(rawQty, dbUnit, nosPerKg) {
   if (dbUnit === 'ml') return rawQty / 1000;              // ml → Ltr
   if (dbUnit === 'g')  return rawQty / 1000;              // g  → Kg
   if (nosPerKg && nosPerKg > 0) return rawQty / nosPerKg; // Nos → Kg (garbage covers etc.)
   return rawQty;                                           // Nos → Nos
 }
 
-function billingUnitLabel(dbUnit, nosPerKg) {
+export function billingUnitLabel(dbUnit, nosPerKg) {
   if (dbUnit === 'ml') return 'Ltr';
   if (dbUnit === 'g')  return 'Kg';
   if (nosPerKg && nosPerKg > 0) return 'Kg';
@@ -51,7 +51,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
       reader.onloadend = () => resolve(reader.result);
       reader.readAsDataURL(blob);
     });
-    doc.addImage(base64data, 'PNG', 14, 5, 20, 20);
+    doc.addImage(base64data, 'PNG', 14, 5, 30, 15);
   } catch (err) {
     console.warn('Failed to load logo for PDF', err);
   }
@@ -78,9 +78,14 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
 
   // Initialise every active master item (ensures all 149 appear even with 0 consumption)
   allItems.forEach(item => {
+    // Exclude items before 2024
+    const tYearStr = item.rate_master?.tender_year || '';
+    const startYear = parseInt(tYearStr.split('-')[0]) || 0;
+    if (startYear > 0 && startYear < 2024) return;
+
     const dbUnit   = item.unit || 'Nos';
     const nosPerKg = item.rate_master?.nos_per_kg || null;
-    groupedItems[item.name] = {
+    groupedItems[item.id] = {
       name:      item.name,
       brand:     item.rate_master?.brand    || 'ORDINARY',
       supplier:  item.rate_master?.supplier || 'Tricuesta',
@@ -96,16 +101,21 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
 
   // Accumulate raw base-unit consumption by ALS group
   consumptionData.forEach(log => {
-    const itemName   = log.inventory_items?.name || 'Unknown';
+    const itemId     = log.item_id;
     const stationCode = log.stations?.code;
     const qty        = Number(log.quantity_used || 0);
 
     // Ensure the item exists (consumed items not in master — shouldn't happen but safe)
-    if (!groupedItems[itemName]) {
+    if (!groupedItems[itemId]) {
+      const tYearStr = log.inventory_items?.rate_master?.tender_year || '';
+      const startYear = parseInt(tYearStr.split('-')[0]) || 0;
+      // Skip if it's explicitly before 2024
+      if (startYear > 0 && startYear < 2024) return;
+
       const dbUnit   = log.inventory_items?.unit || 'Nos';
       const nosPerKg = log.inventory_items?.rate_master?.nos_per_kg || null;
-      groupedItems[itemName] = {
-        name:     itemName,
+      groupedItems[itemId] = {
+        name:     log.inventory_items?.name || 'Unknown',
         brand:    log.inventory_items?.rate_master?.brand    || 'ORDINARY',
         supplier: log.inventory_items?.rate_master?.supplier || 'Tricuesta',
         rate:     Number(log.inventory_items?.rate_master?.unit_rate || 0),
@@ -118,10 +128,10 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
       };
     }
 
-    if      (ALS_GROUPS['ALVA-KLMT'].includes(stationCode)) groupedItems[itemName]['ALVA-KLMT'] += qty;
-    else if (ALS_GROUPS['CCUV-JLSD'].includes(stationCode)) groupedItems[itemName]['CCUV-JLSD'] += qty;
-    else if (ALS_GROUPS['KALR-KVTR'].includes(stationCode)) groupedItems[itemName]['KALR-KVTR'] += qty;
-    else if (ALS_GROUPS['EMKM-TPHT'].includes(stationCode)) groupedItems[itemName]['EMKM-TPHT'] += qty;
+    if      (ALS_GROUPS['ALVA-KLMT'].includes(stationCode)) groupedItems[itemId]['ALVA-KLMT'] += qty;
+    else if (ALS_GROUPS['CCUV-JLSD'].includes(stationCode)) groupedItems[itemId]['CCUV-JLSD'] += qty;
+    else if (ALS_GROUPS['KALR-KVTR'].includes(stationCode)) groupedItems[itemId]['KALR-KVTR'] += qty;
+    else if (ALS_GROUPS['EMKM-TPHT'].includes(stationCode)) groupedItems[itemId]['EMKM-TPHT'] += qty;
   });
 
   // ─── Build PDF table rows ────────────────────────────────────────────────────
@@ -152,7 +162,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
       item.name,
       item.brand,
       item.supplier,
-      `${rate.toFixed(2)} / ${billingUnitLabel(dbUnit, nosPerKg)}`,
+      rate.toFixed(2),
       fmt(alvaQty),
       fmt(ccuvQty),
       fmt(kalrQty),
@@ -181,9 +191,9 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     headStyles: { fillColor: [0, 150, 136], textColor: 255, halign: 'center', valign: 'middle' },
     styles: { fontSize: 7.5, cellPadding: 2 },
     columnStyles: {
-      0:  { halign: 'center', cellWidth: 8 },
-      1:  { cellWidth: 38 },
-      4:  { halign: 'right', cellWidth: 22 },
+      0:  { halign: 'center', cellWidth: 10 },
+      1:  { cellWidth: 45 },
+      4:  { halign: 'right', cellWidth: 15 },
       5:  { halign: 'center' },
       6:  { halign: 'center' },
       7:  { halign: 'center' },

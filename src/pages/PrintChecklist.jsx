@@ -4,8 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useStationStore } from '../store/stationStore';
 import SignatureCanvas from 'react-signature-canvas';
 import { jsPDF } from 'jspdf';
-import { applyPlugin } from 'jspdf-autotable';
-applyPlugin(jsPDF);
+import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
 import { CheckCircle2, Circle } from 'lucide-react';
 
@@ -232,7 +231,7 @@ export default function PrintChecklist() {
         });
       });
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: 45,
         head: [
           [

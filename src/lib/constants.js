@@ -114,6 +114,7 @@ export const NAV_ITEMS = {
     { path: '/inventory', label: 'All Inventory', icon: 'Package' },
     { path: '/stock-received', label: 'Stock Received', icon: 'PackagePlus' },
     { path: '/stock-movement', label: 'Consumption Logs', icon: 'TrendingDown' },
+    { path: '/monthly-bill', label: 'Monthly Bill', icon: 'ClipboardList' },
     { path: '/requests', label: 'All Requests', icon: 'ClipboardList' },
     { path: '/approvals', label: 'Approvals', icon: 'CheckSquare' },
     { path: '/assets', label: 'Asset Lifecycle', icon: 'Boxes' },

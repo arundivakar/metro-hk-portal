@@ -164,11 +164,21 @@ export default function StockMovement() {
         closing_stock: fmtDisp(closingStock > 0 ? closingStock : 0),
         closing_stock_raw: toDisp(closingStock > 0 ? closingStock : 0),
         _zeroStock: closingStock <= 0,
+        _visualOpeningStock: visualOpeningStock,
+        _receiptsDuringMonth: receiptsDuringMonth,
+        _consumptionsDuringMonth: consumptionsDuringMonth
       };
     });
 
+    const activeData = rawData.filter(row => 
+      row.closing_stock_raw > 0 || 
+      row._consumptionsDuringMonth > 0 || 
+      row._receiptsDuringMonth > 0 || 
+      row._visualOpeningStock > 0
+    );
+
     // Sort the data: stock > 0 first, then by consumption (descending), then by name
-    rawData.sort((a, b) => {
+    activeData.sort((a, b) => {
       const aHasStock = a.closing_stock > 0;
       const bHasStock = b.closing_stock > 0;
       
@@ -183,7 +193,7 @@ export default function StockMovement() {
     });
     
     // Add sl_no after sorting
-    return rawData.map((item, index) => ({
+    return activeData.map((item, index) => ({
       ...item,
       sl_no: index + 1
     }));
@@ -294,7 +304,7 @@ export default function StockMovement() {
       // Fetch all consumption logs for the selected month across all stations
       const { data, error } = await supabase
         .from('consumption_logs')
-        .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg)), stations(code)')
+        .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg, tender_year)), stations(code)')
         .gte('consumption_date', startDate)
         .lte('consumption_date', endDate)
         .limit(5000);
@@ -375,11 +385,6 @@ export default function StockMovement() {
       subtitle={role === ROLES.ALS ? 'All stations (Aggregated)' : selectedStation?.name}
       actions={
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {role === ROLES.ALS && (
-            <Button variant="outline" onClick={() => setShowBillModal(true)} style={{ marginRight: '16px' }}>
-              Generate Monthly Bill
-            </Button>
-          )}
           <label style={{ fontSize: '13px', fontWeight: 600 }}>Select Month:</label>
           <input 
             type="month" 
@@ -539,30 +544,6 @@ export default function StockMovement() {
         )}
       </Modal>
 
-      {/* Generate Bill Modal */}
-      <Modal
-        isOpen={showBillModal}
-        onClose={() => setShowBillModal(false)}
-        title="Generate Monthly Bill"
-        size="sm"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setShowBillModal(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleGenerateBill} isLoading={generatingPdf}>
-              Download PDF
-            </Button>
-          </>
-        }
-      >
-        <Alert variant="info" style={{ marginBottom: 'var(--space-4)' }}>
-          This will generate a consolidated monthly bill (KMRL-O&M-OPC-FOR-150 format) for all station segments.
-        </Alert>
-        <div className="form-group">
-          <label className="form-label">Month selected for bill</label>
-          <input type="month" className="form-control" value={selectedMonth} disabled />
-          <p style={{ fontSize: '12px', color: 'var(--color-gray-500)', marginTop: '4px' }}>Change the month using the selector at the top of the page.</p>
-        </div>
-      </Modal>
     </Layout>
   );
 }

@@ -228,8 +228,16 @@ export default function Inventory() {
     };
   });
 
-  // Sort display data: Normal Stock > Low Stock > Zero Stock, then alphabetical
+  // Sort display data: Tender Year (Desc) > Normal Stock > Low Stock > Zero Stock > Alphabetical
   displayData.sort((a, b) => {
+    // 1. Sort by Tender Year descending
+    const yearA = a.tender_year === '—' ? '' : (a.tender_year || '');
+    const yearB = b.tender_year === '—' ? '' : (b.tender_year || '');
+    if (yearA !== yearB) {
+      return yearB.localeCompare(yearA); // e.g. "2025-26" comes before "2024-25"
+    }
+
+    // 2. Sort by Stock Level
     const getStockLevel = (item) => {
       if (item.current_stock <= 0) return 0; // Zero stock
       if (item.is_low) return 1;             // Low stock
@@ -243,6 +251,7 @@ export default function Inventory() {
       return levelB - levelA; // 2 -> 1 -> 0
     }
     
+    // 3. Alphabetical
     return (a.item_name || '').localeCompare(b.item_name || '');
   });
 

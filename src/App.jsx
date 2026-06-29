@@ -17,6 +17,7 @@ import Requests from './pages/Requests';
 import Approvals from './pages/Approvals';
 import AssetLifecycle from './pages/AssetLifecycle';
 import Reports from './pages/Reports';
+import MonthlyBill from './pages/MonthlyBill';
 import NotFound from './pages/NotFound';
 import PrintChecklist from './pages/PrintChecklist';
 import DataInitialization from './pages/DataInitialization';
@@ -135,6 +136,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
               <DataInitialization />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/monthly-bill"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.ALS]}>
+              <MonthlyBill />
             </ProtectedRoute>
           }
         />
