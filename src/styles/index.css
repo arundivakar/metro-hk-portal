@@ -1,5 +1,5 @@
 /* ─── Google Fonts ────────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&display=swap');
 
 /* ─── Design Tokens ──────────────────────────────────────────────────────────── */
 :root {
@@ -61,6 +61,12 @@
   --color-gray-50:  #f9fafb;
   --color-white:    #ffffff;
 
+  /* Semantic shorthand tokens */
+  --color-text-muted: var(--color-gray-500);
+  --color-text-subtle: var(--color-gray-400);
+  --color-border: var(--color-gray-200);
+  --color-border-focus: var(--color-primary-400);
+
   /* Sidebar */
   --sidebar-bg: var(--color-primary-900);
   --sidebar-width: 260px;
@@ -72,12 +78,13 @@
   --topbar-border: var(--color-gray-200);
 
   /* Content */
-  --content-bg: var(--color-gray-50);
+  --content-bg: #f1f5f9;
   --card-bg: var(--color-white);
   --card-border: var(--color-gray-200);
   --card-radius: 12px;
-  --card-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
-  --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
+  --card-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+  --card-shadow-elevated: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05);
 
   /* Typography */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -155,11 +162,11 @@ h6 { font-size: var(--font-size-sm); }
 p { line-height: 1.6; }
 
 a {
-  color: var(--color-accent-500);
+  color: var(--color-primary-600);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
-a:hover { color: var(--color-accent-600); }
+a:hover { color: var(--color-primary-700); }
 
 /* ─── Form Elements ──────────────────────────────────────────────────────────── */
 input, select, textarea {
@@ -175,7 +182,7 @@ button {
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--color-gray-300);
@@ -218,8 +225,13 @@ button {
 
 /* ─── Animations ─────────────────────────────────────────────────────────────── */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 @keyframes slideInLeft {
@@ -242,17 +254,18 @@ button {
 }
 
 .animate-fade-in    { animation: fadeIn 0.3s ease both; }
+.animate-fade-scale { animation: fadeInScale 0.25s ease both; }
 .animate-slide-left { animation: slideInLeft 0.3s ease both; }
 .animate-pulse      { animation: pulse 2s ease infinite; }
 
 /* ─── Focus Styles ───────────────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid var(--color-accent-500);
+  outline: 2px solid var(--color-primary-400);
   outline-offset: 2px;
 }
 
 /* ─── Selection ──────────────────────────────────────────────────────────────── */
 ::selection {
-  background: var(--color-accent-300);
+  background: var(--color-primary-100);
   color: var(--color-primary-800);
 }

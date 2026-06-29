@@ -163,6 +163,7 @@ export default function StockMovement() {
         consumption: fmtDisp(consumptionsDuringMonth),
         closing_stock: fmtDisp(closingStock > 0 ? closingStock : 0),
         closing_stock_raw: toDisp(closingStock > 0 ? closingStock : 0),
+        _zeroStock: closingStock <= 0,
       };
     });
 

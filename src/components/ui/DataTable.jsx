@@ -4,7 +4,8 @@ import Spinner from './Spinner';
 import EmptyState from './EmptyState';
 
 /**
- * DataTable component with sorting, optional row click, loading + empty states
+ * DataTable component with sorting, optional row click, loading + empty states,
+ * sticky header, and row-class support (_rowClass, _zeroStock).
  *
  * columns: [{ key, label, render?, sortable?, width?, align? }]
  */
@@ -18,6 +19,7 @@ export default function DataTable({
   rowKey = 'id',
   onRowClick,
   className = '',
+  stickyHeader = true,
 }) {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -54,7 +56,7 @@ export default function DataTable({
   }
 
   return (
-    <div className={`table-wrapper ${className}`}>
+    <div className={`table-wrapper ${className}`} style={stickyHeader ? { maxHeight: '65vh', overflowY: 'auto' } : {}}>
       <table className="data-table">
         <thead>
           <tr>
@@ -80,24 +82,32 @@ export default function DataTable({
           </tr>
         </thead>
         <tbody>
-          {sortedData.map((row, rowIndex) => (
-            <tr
-              key={row[rowKey]}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              style={onRowClick ? { cursor: 'pointer' } : undefined}
-              className={row._rowClass ?? ''}
-            >
-              {columns.map((col) => (
-                <td
-                  key={col.key}
-                  style={{ textAlign: col.align ?? 'left' }}
-                  className={col.key === 'actions' ? 'col-actions' : ''}
-                >
-                  {col.render ? col.render(row[col.key], row, rowIndex) : (row[col.key] ?? '—')}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {sortedData.map((row, rowIndex) => {
+            // Build row class: support _rowClass and _zeroStock
+            const rowClasses = [
+              row._rowClass ?? '',
+              row._zeroStock ? 'zero-stock-row' : '',
+            ].filter(Boolean).join(' ');
+
+            return (
+              <tr
+                key={row[rowKey] ?? rowIndex}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                style={onRowClick ? { cursor: 'pointer' } : undefined}
+                className={rowClasses}
+              >
+                {columns.map((col) => (
+                  <td
+                    key={col.key}
+                    style={{ textAlign: col.align ?? 'left' }}
+                    className={col.key === 'actions' ? 'col-actions' : ''}
+                  >
+                    {col.render ? col.render(row[col.key], row, rowIndex) : (row[col.key] ?? '—')}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

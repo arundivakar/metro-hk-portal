@@ -224,6 +224,7 @@ export default function Inventory() {
       last_updated: row.last_updated ? new Date(row.last_updated).toLocaleDateString('en-IN') : '—',
       is_low: (role === ROLES.ALS || role === ROLES.HKTL) ? false : row.is_low_stock,
       _rowClass: ((role !== ROLES.ALS && role !== ROLES.HKTL) && row.is_low_stock) ? 'low-stock-row' : '',
+      _zeroStock: rawStock === 0,
     };
   });
 

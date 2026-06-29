@@ -132,9 +132,16 @@ function StationDashboard({ station }) {
     };
   });
 
-  const { role } = useAuthStore();
+  const { role, profile } = useAuthStore();
   const isSC = role === ROLES.SC;
   const showVerificationReminder = isSC && isVerificationDay();
+
+  // Dynamic greeting
+  const hour = new Date().getHours();
+  let greeting = 'Good evening';
+  if (hour < 12) greeting = 'Good morning';
+  else if (hour < 17) greeting = 'Good afternoon';
+  const firstName = profile?.full_name?.split(' ')[0] || 'User';
 
   return (
     <>
@@ -152,11 +159,11 @@ function StationDashboard({ station }) {
       )}
 
       {/* Welcome Banner */}
-      <div className="dashboard-welcome animate-fade-in">
-        <div>
-          <div className="dashboard-welcome-title">Good day! 👋</div>
-          <div className="dashboard-welcome-sub">Here's your station overview for today</div>
-          <div className="dashboard-welcome-station">
+      <div className="station-hero-banner animate-fade-in" style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ flex: 1, zIndex: 2, position: 'relative' }}>
+          <div className="station-hero-title">{greeting}, {firstName}! 👋</div>
+          <div className="station-hero-sub">Here's your station overview for today</div>
+          <div className="station-hero-chip">
             <Building2 size={14} />
             {station.code} — {station.name}
           </div>
@@ -168,7 +175,7 @@ function StationDashboard({ station }) {
             </div>
           )}
         </div>
-        <Activity size={48} style={{ opacity: 0.2 }} />
+        <Activity size={48} style={{ opacity: 0.2, zIndex: 1, position: 'relative' }} />
       </div>
 
       {/* KPI Cards */}
@@ -353,12 +360,12 @@ function ALSDashboard() {
 
   return (
     <>
-      <div className="dashboard-welcome animate-fade-in">
-        <div>
-          <div className="dashboard-welcome-title">ALS Dashboard 📊</div>
-          <div className="dashboard-welcome-sub">Complete system overview — all 25 stations</div>
+      <div className="station-hero-banner animate-fade-in" style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ flex: 1, zIndex: 2, position: 'relative' }}>
+          <div className="station-hero-title">ALS Dashboard 📊</div>
+          <div className="station-hero-sub">Complete system overview — all 25 stations</div>
         </div>
-        <Activity size={48} style={{ opacity: 0.2 }} />
+        <Activity size={48} style={{ opacity: 0.2, zIndex: 1, position: 'relative' }} />
       </div>
 
       <div className="kpi-grid">
