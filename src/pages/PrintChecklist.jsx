@@ -275,7 +275,7 @@ export default function PrintChecklist() {
         doc.addPage();
       }
 
-      const sigBase64 = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+      const sigBase64 = sigCanvas.current.getCanvas().toDataURL('image/png');
       
       doc.setFont('helvetica', 'bold');
       doc.text('Verification Details:', 15, finalY);
