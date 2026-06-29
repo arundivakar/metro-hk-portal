@@ -4,10 +4,8 @@ import Spinner from './Spinner';
 import EmptyState from './EmptyState';
 
 /**
- * DataTable component with sorting, optional row click, loading + empty states,
- * sticky header, and row-class support (_rowClass, _zeroStock).
- *
- * columns: [{ key, label, render?, sortable?, width?, align? }]
+ * DataTable — UI polished. Zero logic/API/prop changes.
+ * Added: sort-active class on th, improved sort icon visibility.
  */
 export default function DataTable({
   columns = [],
@@ -55,8 +53,18 @@ export default function DataTable({
     return <EmptyState title={emptyTitle} description={emptyDesc} icon={emptyIcon} />;
   }
 
+  const SortIcon = ({ colKey }) => {
+    if (sortKey !== colKey) return <ChevronsUpDown size={11} style={{ opacity: 0.3, flexShrink: 0 }} />;
+    return sortDir === 'asc'
+      ? <ChevronUp   size={11} style={{ color: 'var(--color-primary-600)', flexShrink: 0 }} />
+      : <ChevronDown size={11} style={{ color: 'var(--color-primary-600)', flexShrink: 0 }} />;
+  };
+
   return (
-    <div className={`table-wrapper ${className}`} style={stickyHeader ? { maxHeight: '65vh', overflowY: 'auto' } : {}}>
+    <div
+      className={`table-wrapper ${className}`}
+      style={stickyHeader ? { maxHeight: '65vh', overflowY: 'auto' } : {}}
+    >
       <table className="data-table">
         <thead>
           <tr>
@@ -64,18 +72,22 @@ export default function DataTable({
               <th
                 key={col.key}
                 style={{ width: col.width, textAlign: col.align ?? 'left' }}
-                className={col.sortable ? 'sortable' : ''}
+                className={[
+                  col.sortable ? 'sortable' : '',
+                  col.sortable && sortKey === col.key ? 'sort-active' : '',
+                ].filter(Boolean).join(' ')}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
+                aria-sort={
+                  col.sortable
+                    ? sortKey === col.key
+                      ? sortDir === 'asc' ? 'ascending' : 'descending'
+                      : 'none'
+                    : undefined
+                }
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   {col.label}
-                  {col.sortable && (
-                    sortKey === col.key
-                      ? sortDir === 'asc'
-                        ? <ChevronUp size={12} />
-                        : <ChevronDown size={12} />
-                      : <ChevronsUpDown size={12} style={{ opacity: 0.4 }} />
-                  )}
+                  {col.sortable && <SortIcon colKey={col.key} />}
                 </span>
               </th>
             ))}
@@ -83,7 +95,6 @@ export default function DataTable({
         </thead>
         <tbody>
           {sortedData.map((row, rowIndex) => {
-            // Build row class: support _rowClass and _zeroStock
             const rowClasses = [
               row._rowClass ?? '',
               row._zeroStock ? 'zero-stock-row' : '',
@@ -95,6 +106,8 @@ export default function DataTable({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 style={onRowClick ? { cursor: 'pointer' } : undefined}
                 className={rowClasses}
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={onRowClick ? (e) => e.key === 'Enter' && onRowClick(row) : undefined}
               >
                 {columns.map((col) => (
                   <td

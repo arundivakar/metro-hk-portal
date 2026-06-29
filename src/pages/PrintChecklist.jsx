@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase';
 import { useStationStore } from '../store/stationStore';
 import SignatureCanvas from 'react-signature-canvas';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { applyPlugin } from 'jspdf-autotable';
+applyPlugin(jsPDF);
 import toast from 'react-hot-toast';
 import { CheckCircle2, Circle } from 'lucide-react';
 
@@ -231,7 +232,7 @@ export default function PrintChecklist() {
         });
       });
 
-      autoTable(doc, {
+      doc.autoTable({
         startY: 45,
         head: [
           [
@@ -267,7 +268,8 @@ export default function PrintChecklist() {
       });
 
       // Signature & Details Footer
-      const finalY = doc.lastAutoTable.finalY + 15;
+      const tableFinalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : (doc.autoTable && doc.autoTable.previous ? doc.autoTable.previous.finalY : 120);
+      const finalY = tableFinalY + 15;
       
       // If signature is pushed to next page, add a new page
       if (finalY > doc.internal.pageSize.getHeight() - 40) {
@@ -277,21 +279,21 @@ export default function PrintChecklist() {
       const sigBase64 = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
       
       doc.setFont('helvetica', 'bold');
-      doc.text('Verification Details:', 15, doc.lastAutoTable.finalY + 10);
+      doc.text('Verification Details:', 15, finalY);
       
       doc.setFont('helvetica', 'normal');
-      doc.text(`Verified By (SC Name): ${verifierName}`, 15, doc.lastAutoTable.finalY + 18);
-      doc.text(`Employee ID: ${empId}`, 15, doc.lastAutoTable.finalY + 26);
-      doc.text('Signature:', 15, doc.lastAutoTable.finalY + 34);
+      doc.text(`Verified By (SC Name): ${verifierName}`, 15, finalY + 8);
+      doc.text(`Employee ID: ${empId}`, 15, finalY + 16);
+      doc.text('Signature:', 15, finalY + 24);
       
-      doc.addImage(sigBase64, 'PNG', 35, doc.lastAutoTable.finalY + 25, 40, 20);
+      doc.addImage(sigBase64, 'PNG', 35, finalY + 15, 40, 20);
 
       doc.save(`KMRL_Stock_Verification_${selectedStation.code}_${today.replace(/\//g, '-')}.pdf`);
       toast.success('Checklist generated successfully!');
 
     } catch (err) {
-      console.error(err);
-      toast.error('Failed to generate PDF');
+      console.error('PDF Generation Error:', err);
+      toast.error('Failed to generate PDF: ' + (err.message || 'Unknown error'));
     }
   };
 

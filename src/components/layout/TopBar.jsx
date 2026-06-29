@@ -5,11 +5,7 @@ import { useStationStore } from '../../store/stationStore';
 import { ROLES, ALS_GROUPS } from '../../lib/constants';
 
 /**
- * TopBar — page title area + station chip + notification placeholder
- * @param {string} title - Page title
- * @param {string} subtitle - Optional subtitle
- * @param {node} actions - Optional right-side action buttons
- * @param {function} onChangeStation - Called when user clicks "Change" station
+ * TopBar — UI polished. Zero logic/prop/API changes.
  */
 export default function TopBar({ title, subtitle, actions, onChangeStation, onMenuClick }) {
   const { role } = useAuthStore();
@@ -21,8 +17,12 @@ export default function TopBar({ title, subtitle, actions, onChangeStation, onMe
     <header className="topbar">
       <div className="topbar-left">
         {onMenuClick && (
-          <button className="btn btn-ghost topbar-menu-btn" onClick={onMenuClick} style={{ padding: 'var(--space-2)' }}>
-            <Menu size={20} />
+          <button
+            className="btn btn-ghost topbar-menu-btn"
+            onClick={onMenuClick}
+            aria-label="Open navigation"
+          >
+            <Menu size={19} />
           </button>
         )}
         <div>
@@ -32,12 +32,12 @@ export default function TopBar({ title, subtitle, actions, onChangeStation, onMe
       </div>
 
       <div className="topbar-right">
-        {/* Station chip for HKS/SC */}
+        {/* Station chip — HKS/SC */}
         {showStation && (
           <div className="topbar-station-chip">
-            <MapPin size={12} />
-            <span>{selectedStation.code}</span>
-            <span style={{ color: 'var(--color-gray-400)', fontWeight: 400 }}>
+            <MapPin size={11} />
+            <span style={{ fontWeight: 700 }}>{selectedStation.code}</span>
+            <span style={{ color: 'var(--color-primary-500)', fontWeight: 400 }}>
               {selectedStation.name}
             </span>
             {onChangeStation && (
@@ -46,7 +46,7 @@ export default function TopBar({ title, subtitle, actions, onChangeStation, onMe
                 onClick={onChangeStation}
                 title="Change working station"
               >
-                <RefreshCw size={11} style={{ display: 'inline', marginRight: 3 }} />
+                <RefreshCw size={10} style={{ display: 'inline', marginRight: 2 }} />
                 Change
               </button>
             )}
@@ -55,8 +55,15 @@ export default function TopBar({ title, subtitle, actions, onChangeStation, onMe
 
         {/* ALS Group Dropdown */}
         {role === ROLES.ALS && (
-          <div className="topbar-station-chip" style={{ color: 'var(--color-success-700)', borderColor: 'var(--color-success-300)', background: 'var(--color-success-50)', padding: '2px 8px' }}>
-            <MapPin size={12} />
+          <div
+            className="topbar-station-chip"
+            style={{
+              color: 'var(--color-primary-700)',
+              borderColor: 'var(--color-primary-200)',
+              background: 'var(--color-primary-50)',
+            }}
+          >
+            <MapPin size={11} />
             <select
               value={alsGroupFilter}
               onChange={(e) => setAlsGroupFilter(e.target.value)}
@@ -65,31 +72,39 @@ export default function TopBar({ title, subtitle, actions, onChangeStation, onMe
                 background: 'transparent',
                 color: 'inherit',
                 fontWeight: 600,
-                fontSize: '12px',
+                fontSize: 'var(--font-size-xs)',
                 outline: 'none',
                 cursor: 'pointer',
-                maxWidth: '100px',
+                maxWidth: '110px',
+                fontFamily: 'var(--font-family)',
               }}
+              aria-label="Select ALS group"
             >
               {Object.keys(ALS_GROUPS).map((group) => (
-                <option key={group} value={group} style={{ color: '#000' }}>{group}</option>
+                <option key={group} value={group} style={{ color: '#000' }}>
+                  {group}
+                </option>
               ))}
             </select>
           </div>
         )}
 
-        {/* Notification bell placeholder */}
+        {/* Notification bell */}
         <button
           className="btn btn-ghost btn-sm"
           style={{ padding: '6px', borderRadius: '50%' }}
           title="Notifications"
           aria-label="Notifications"
         >
-          <Bell size={16} />
+          <Bell size={15} />
         </button>
 
         {/* Page-level actions */}
-        {actions && <div style={{ display: 'flex', gap: 'var(--space-2)' }}>{actions}</div>}
+        {actions && (
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+            {actions}
+          </div>
+        )}
       </div>
     </header>
   );

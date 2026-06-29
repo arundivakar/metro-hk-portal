@@ -160,20 +160,33 @@ function StationDashboard({ station }) {
 
       {/* Welcome Banner */}
       <div className="station-hero-banner animate-fade-in" style={{ marginBottom: 'var(--space-6)' }}>
-        <div style={{ flex: 1, zIndex: 2, position: 'relative' }}>
+        <div style={{ zIndex: 2, position: 'relative' }}>
           <div className="station-hero-title">{greeting}, {firstName}! 👋</div>
           <div className="station-hero-sub">Here's your station overview for today</div>
-          <div className="station-hero-chip">
-            <Building2 size={14} />
-            {station.code} — {station.name}
-          </div>
-          {isSC && (
-            <div style={{ marginTop: '1rem' }}>
-              <Button variant="outline" onClick={() => window.open('/stock-verification', '_blank')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
-                <ClipboardList size={16} /> Digital Stock Verification
-              </Button>
+          
+          <div className="station-hero-row">
+            <div className="station-hero-chip">
+              <Building2 size={14} />
+              {station.code} — {station.name}
             </div>
-          )}
+            {isSC && (
+              <Button 
+                variant="outline" 
+                onClick={() => window.open('/stock-verification', '_blank')} 
+                style={{ 
+                  background: 'rgba(255,255,255,0.1)', 
+                  color: 'white', 
+                  borderColor: 'rgba(255,255,255,0.25)',
+                  padding: '4px 12px',
+                  minHeight: '28px',
+                  height: 'auto',
+                  fontSize: 'var(--font-size-xs)'
+                }}
+              >
+                <ClipboardList size={14} /> Verify Stock
+              </Button>
+            )}
+          </div>
         </div>
         <Activity size={48} style={{ opacity: 0.2, zIndex: 1, position: 'relative' }} />
       </div>
@@ -361,7 +374,7 @@ function ALSDashboard() {
   return (
     <>
       <div className="station-hero-banner animate-fade-in" style={{ marginBottom: 'var(--space-6)' }}>
-        <div style={{ flex: 1, zIndex: 2, position: 'relative' }}>
+        <div style={{ zIndex: 2, position: 'relative' }}>
           <div className="station-hero-title">ALS Dashboard 📊</div>
           <div className="station-hero-sub">Complete system overview — all 25 stations</div>
         </div>

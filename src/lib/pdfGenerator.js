@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { applyPlugin } from 'jspdf-autotable';
+applyPlugin(jsPDF);
 import { ALS_GROUPS } from './constants';
 
 /**
@@ -172,7 +173,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     grandTotal.toFixed(2),
   ]);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 41,
     head: [['Sl.\nNo', 'Cleaning Material', 'Brand', 'Supplier', 'Rate', 'ALVA-KLMT', 'CCUV-JLSD', 'KALR-KVTR', 'EMKM-TPHT', 'Total', 'Amount (₹)']],
     body: tableData,

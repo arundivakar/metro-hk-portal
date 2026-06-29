@@ -314,15 +314,15 @@ export default function StockMovement() {
 
 
   const columns = [
-    { key: 'sl_no', label: 'Sl. No', render: (v) => <span style={{ color: 'var(--color-gray-500)' }}>{v}</span> },
-    { key: 'item_name', label: 'Cleaning Material', sortable: true, render: (v) => <strong>{v}</strong> },
+    { key: 'sl_no', label: 'Sl.No', width: 60, render: (v) => <span style={{ color: 'var(--color-gray-500)' }}>{v}</span> },
+    { key: 'item_name', label: 'Item Name', sortable: true, render: (v) => <strong>{v}</strong> },
     { key: 'brand', label: 'Brand' },
     { key: 'supplier', label: 'Supplier' },
     { key: 'tender_year', label: 'Tender Year', width: 100, render: (v) => <span style={{ whiteSpace: 'nowrap' }}>{v}</span> },
-    { key: 'opening_stock',        label: 'Opening Stock',            render: (v, row) => `${v} ${row.unit}` },
-    { key: 'received_transferred', label: 'Received / Transferred', width: 120, render: (v, row) => `${v} ${row.unit}` },
-    { key: 'consumption',          label: 'Consumption this month',  render: (v, row) => `${v} ${row.unit}` },
-    { key: 'closing_stock',        label: 'Closing Stock',           render: (v, row) => <strong style={{ color: Number(row.closing_stock_raw) === 0 ? 'var(--color-danger-600)' : 'inherit' }}>{v} {row.unit}</strong> },
+    { key: 'opening_stock',        label: 'Opening',            render: (v, row) => `${v} ${row.unit}` },
+    { key: 'received_transferred', label: 'Received', width: 100, render: (v, row) => `${v} ${row.unit}` },
+    { key: 'consumption',          label: 'Consumed',  render: (v, row) => `${v} ${row.unit}` },
+    { key: 'closing_stock',        label: 'Closing',           render: (v, row) => <strong style={{ color: Number(row.closing_stock_raw) === 0 ? 'var(--color-danger-600)' : 'inherit' }}>{v} {row.unit}</strong> },
     ...(role === ROLES.SC ? [{
       key: 'actions', label: 'Actions', render: (_, row) => (
         <Button variant="outline" onClick={() => {
