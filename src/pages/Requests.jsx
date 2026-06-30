@@ -227,7 +227,11 @@ export default function Requests() {
             <select id="req-item" className="form-control" value={form.item_id}
               onChange={(e) => setForm((f) => ({ ...f, item_id: e.target.value }))} required>
               <option value="">— Select item —</option>
-              {items.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+              {items.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name} ({i.unit}){i.rate_master?.tender_year ? ` [${i.rate_master.tender_year}]` : ''}
+                </option>
+              ))}
             </select>
           </div>
           <div className="form-grid">
