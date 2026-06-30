@@ -160,6 +160,7 @@ function StationDashboard({ station }) {
 
       {/* Welcome Banner */}
       <div className="station-hero-banner animate-fade-in" style={{ marginBottom: 'var(--space-6)' }}>
+        <div className="station-hero-blobs"></div>
         <div style={{ zIndex: 2, position: 'relative' }}>
           <div className="station-hero-title">{greeting}, {firstName}! 👋</div>
           <div className="station-hero-sub">Here's your station overview for today</div>
@@ -373,6 +374,7 @@ function ALSDashboard() {
   return (
     <>
       <div className="station-hero-banner animate-fade-in" style={{ marginBottom: 'var(--space-6)' }}>
+        <div className="station-hero-blobs"></div>
         <div style={{ zIndex: 2, position: 'relative' }}>
           <div className="station-hero-title">{role === ROLES.ALS ? 'ALS Dashboard' : 'HKTL Dashboard'} 📊</div>
           <div className="station-hero-sub">Complete system overview — all 25 stations</div>
