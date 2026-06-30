@@ -6,13 +6,14 @@ import SignatureCanvas from 'react-signature-canvas';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import toast from 'react-hot-toast';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2, Circle, Search } from 'lucide-react';
 
 export default function PrintChecklist() {
   const { selectedStation } = useStationStore();
   const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Form State
   const [verificationData, setVerificationData] = useState({});
@@ -299,6 +300,10 @@ export default function PrintChecklist() {
   if (isLoading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading verification data...</div>;
   if (error) return <div style={{ padding: '2rem', color: 'red', textAlign: 'center' }}>{error}</div>;
 
+  const displayData = data.filter(item => 
+    !searchQuery || item.item_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', background: '#f8f9fa', minHeight: '100vh', paddingBottom: '80px' }}>
       
@@ -313,9 +318,27 @@ export default function PrintChecklist() {
           Please physically verify the following items at the station and check them off.
         </p>
 
+        {/* Search Bar */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <div className="search-input-wrapper">
+            <Search size={15} className="search-input-icon" />
+            <input
+              type="search"
+              className="search-input"
+              placeholder="Search items..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
         {/* Item Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {data.map((item, i) => {
+          {displayData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-500)' }}>
+              No items match your search.
+            </div>
+          ) : displayData.map((item, i) => {
             const vData = verificationData[item.item_id] || { verified: false, remarks: '' };
             const isVerified = vData.verified;
 

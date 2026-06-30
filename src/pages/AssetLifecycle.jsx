@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Boxes, Plus, ChevronRight, History, PackagePlus, Pencil, Trash2 } from 'lucide-react';
+import { Boxes, Plus, ChevronRight, History, PackagePlus, Pencil, Trash2, Search } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -36,6 +36,7 @@ export default function AssetLifecycle() {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [alsStation, setAlsStation] = useState('All');
+  const [search, setSearch] = useState('');
   const [stations, setStations] = useState([]);
 
   const allowedStations = ALS_GROUPS[alsGroupFilter];
@@ -224,8 +225,8 @@ export default function AssetLifecycle() {
       (statusFilter === ASSET_STATUS.PARTIALLY_DAMAGED && a.quantity_damaged > 0) ||
       (statusFilter === ASSET_STATUS.DISPOSED && a.quantity_disposed > 0)
     )
-    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code))
-    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || alsStation === 'All' || a.stations?.code === alsStation);
+    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || alsStation === 'All' || a.stations?.code === alsStation)
+    .filter((a) => !search || (a.inventory_items?.name || '').toLowerCase().includes(search.toLowerCase()));
 
   const filteredHistory = historyLogs
     .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code))
@@ -346,6 +347,16 @@ export default function AssetLifecycle() {
       {activeTab === 'assets' && (
         <>
           <div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
+            <div className="search-input-wrapper" style={{ flex: 1, minWidth: '200px' }}>
+              <Search size={15} className="search-input-icon" />
+              <input
+                type="search"
+                className="search-input"
+                placeholder="Search items..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
             <select className="form-control" style={{ width: 'auto' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="All">All Stages</option>
               {Object.entries(ASSET_STATUS_LABELS).map(([k, v]) => (
