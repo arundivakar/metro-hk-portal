@@ -25,7 +25,6 @@ export default function Inventory() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [allStationsInventory, setAllStationsInventory] = useState([]);
-  const [stationFilter, setStationFilter] = useState('All');
   const [alsLoading, setAlsLoading] = useState(false);
 
   // Edit Master state
@@ -190,8 +189,7 @@ export default function Inventory() {
     const name = (row.item_name ?? '').toLowerCase();
     const matchSearch = !search || name.includes(search.toLowerCase());
     const matchCategory = categoryFilter === 'All' || row.category === categoryFilter;
-    const matchStation = (role !== ROLES.ALS && role !== ROLES.HKTL) || stationFilter === 'All' || row.station_code === stationFilter;
-    return matchSearch && matchCategory && matchStation;
+    return matchSearch && matchCategory;
   });
 
   const displayData = filteredData.map((row) => {
@@ -204,7 +202,6 @@ export default function Inventory() {
     return {
       id: (role === ROLES.ALS || role === ROLES.HKTL) ? row.item_id : (row.item_id + '-' + row.station_id),
       item_id: row.item_id,  // raw item_id for edit
-      station_code: row.station_code || 'ALL',
       item_name: row.item_name ?? '—',
       category: row.category ?? '—',
       unit: dispUnit,
@@ -255,8 +252,6 @@ export default function Inventory() {
   });
 
   const lowStockCount = (role === ROLES.ALS || role === ROLES.HKTL) ? 0 : displayData.filter((r) => r.is_low).length;
-
-  const stationCodes = [];
 
   const columns = [
     { key: 'item_name', label: 'Item Name', sortable: true },
