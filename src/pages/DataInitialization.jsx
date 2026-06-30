@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
-import { ROLES, ALS_GROUPS } from '../lib/constants';
+import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import { useStationStore } from '../store/stationStore';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
@@ -31,8 +31,15 @@ export default function DataInitialization() {
 
   useEffect(() => {
     const fetchStations = async () => {
-      const { data } = await supabase.from('stations').select('*').eq('is_active', true).order('code');
-      if (data) setStations(data);
+      const { data } = await supabase.from('stations').select('*').eq('is_active', true);
+      if (data) {
+        const sorted = data.sort((a, b) => {
+          const indexA = STATION_ORDER.indexOf(a.code);
+          const indexB = STATION_ORDER.indexOf(b.code);
+          return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+        });
+        setStations(sorted);
+      }
     };
     fetchStations();
   }, []);
