@@ -56,7 +56,8 @@ export default function Inventory() {
         .from('v_station_inventory_summary')
         .select('*')
         .order('station_code', { ascending: true })
-        .order('item_name', { ascending: true });
+        .order('item_name', { ascending: true })
+        .limit(10000);
       if (error) throw error;
       setAllStationsInventory(data ?? []);
     } catch (err) {
