@@ -52,27 +52,13 @@ export default function Inventory() {
   const loadAllInventory = async () => {
     setAlsLoading(true);
     try {
-      let allData = [];
-      let from = 0;
-      const step = 1000;
-      
-      while (true) {
-        const { data, error } = await supabase
-          .from('v_station_inventory_summary')
-          .select('*')
-          .order('station_code', { ascending: true })
-          .order('item_name', { ascending: true })
-          .range(from, from + step - 1);
-          
-        if (error) throw error;
-        if (!data || data.length === 0) break;
+      const { data, error } = await supabase
+        .from('v_all_inventory_summary')
+        .select('*')
+        .order('item_name', { ascending: true });
         
-        allData = allData.concat(data);
-        if (data.length < step) break;
-        from += step;
-      }
-      
-      setAllStationsInventory(allData);
+      if (error) throw error;
+      setAllStationsInventory(data ?? []);
     } catch (err) {
       console.error('ALS inventory error:', err);
     } finally {
@@ -208,17 +194,6 @@ export default function Inventory() {
     return matchSearch && matchCategory && matchStation;
   });
 
-  if ((role === ROLES.ALS || role === ROLES.HKTL)) {
-    const grouped = {};
-    filteredData.forEach((row) => {
-      if (!grouped[row.item_id]) {
-        grouped[row.item_id] = { ...row, current_stock: 0 };
-      }
-      grouped[row.item_id].current_stock += Number(row.current_stock);
-    });
-    filteredData = Object.values(grouped);
-  }
-
   const displayData = filteredData.map((row) => {
     const dbUnit   = row.unit ?? 'Nos';
     const dispUnit = getDisplayUnit(dbUnit);
@@ -229,7 +204,7 @@ export default function Inventory() {
     return {
       id: (role === ROLES.ALS || role === ROLES.HKTL) ? row.item_id : (row.item_id + '-' + row.station_id),
       item_id: row.item_id,  // raw item_id for edit
-      station_code: row.station_code,
+      station_code: row.station_code || 'ALL',
       item_name: row.item_name ?? '—',
       category: row.category ?? '—',
       unit: dispUnit,
@@ -281,9 +256,7 @@ export default function Inventory() {
 
   const lowStockCount = (role === ROLES.ALS || role === ROLES.HKTL) ? 0 : displayData.filter((r) => r.is_low).length;
 
-  const stationCodes = (role === ROLES.ALS || role === ROLES.HKTL)
-    ? [...new Set(allStationsInventory.map((r) => r.station_code).filter(Boolean))].sort()
-    : [];
+  const stationCodes = [];
 
   const columns = [
     { key: 'item_name', label: 'Item Name', sortable: true },
