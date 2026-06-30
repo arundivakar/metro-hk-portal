@@ -13,7 +13,7 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
-import { ROLES, ALS_GROUPS } from '../lib/constants';
+import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 import { isVerificationDay } from '../utils/dateHelpers';
@@ -293,13 +293,11 @@ function ALSDashboard() {
 
       if (stErr) throw stErr;
 
-      const stationOrder = ['ALVA','PNCU','CPPY','AATK','MUTT','KLMT','CCUV','PDPM','EDAP','CGPP','PARV','JLSD','KALR','TNHL','MGRD','MACE','ERSH','KVTR','EMKM','VYTA','TKDM','PETT','VAKK','SNJN','TPHT'];
-
       const filteredStations = stationsData
         .filter((s) => !allowedStations || allowedStations.includes(s.code))
         .sort((a, b) => {
-          const indexA = stationOrder.indexOf(a.code);
-          const indexB = stationOrder.indexOf(b.code);
+          const indexA = STATION_ORDER.indexOf(a.code);
+          const indexB = STATION_ORDER.indexOf(b.code);
           return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
         });
 

@@ -10,7 +10,7 @@ import { AssetStatusBadge } from '../components/ui/Badge';
 import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { supabase } from '../lib/supabase';
-import { ROLES, ASSET_STATUS, ASSET_STATUS_LABELS, ALS_GROUPS } from '../lib/constants';
+import { ROLES, ASSET_STATUS, ASSET_STATUS_LABELS, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import toast from 'react-hot-toast';
 
 export default function AssetLifecycle() {
@@ -72,8 +72,13 @@ export default function AssetLifecycle() {
       setAssets(data ?? []);
 
       if ((role === ROLES.ALS || role === ROLES.HKTL)) {
-        const { data: stationsData } = await supabase.from('stations').select('id,code,name').eq('is_active', true).order('code');
-        setStations(stationsData ?? []);
+        const { data: stationsData } = await supabase.from('stations').select('id,code,name').eq('is_active', true);
+        const sortedStations = (stationsData ?? []).sort((a, b) => {
+          const indexA = STATION_ORDER.indexOf(a.code);
+          const indexB = STATION_ORDER.indexOf(b.code);
+          return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+        });
+        setStations(sortedStations);
       }
     } catch (err) {
       console.error(err);

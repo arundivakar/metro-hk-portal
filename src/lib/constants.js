@@ -129,3 +129,10 @@ export const ALS_GROUPS = {
   'KALR-KVTR': ['KALR', 'TNHL', 'MGRD', 'MACE', 'ERSH', 'KVTR'],
   'EMKM-TPHT': ['EMKM', 'VYTA', 'TKDM', 'PETT', 'VAKK', 'SNJN', 'TPHT'],
 };
+
+// ─── Station Geographical Order (North to South) ──────────────────────────────
+export const STATION_ORDER = [
+  'ALVA', 'PNCU', 'CPPY', 'AATK', 'MUTT', 'KLMT', 'CCUV', 'PDPM', 'EDAP', 
+  'CGPP', 'PARV', 'JLSD', 'KALR', 'TNHL', 'MGRD', 'MACE', 'ERSH', 'KVTR', 
+  'EMKM', 'VYTA', 'TKDM', 'PETT', 'VAKK', 'SNJN', 'TPHT'
+];

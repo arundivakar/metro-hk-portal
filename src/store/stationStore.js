@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { STATION_ORDER } from '../lib/constants';
 
 const SESSION_KEY = 'metro_selected_station';
 
@@ -57,7 +58,12 @@ export const useStationStore = create((set, get) => ({
 
       const stations = data
         .map((us) => us.stations)
-        .filter((s) => s?.is_active);
+        .filter((s) => s?.is_active)
+        .sort((a, b) => {
+          const indexA = STATION_ORDER.indexOf(a.code);
+          const indexB = STATION_ORDER.indexOf(b.code);
+          return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+        });
 
       set({ assignedStations: stations });
       return stations;
@@ -76,12 +82,18 @@ export const useStationStore = create((set, get) => ({
       const { data, error } = await supabase
         .from('stations')
         .select('*')
-        .eq('is_active', true)
-        .order('code');
+        .eq('is_active', true);
 
       if (error) throw error;
-      set({ assignedStations: data });
-      return data;
+      
+      const sortedStations = (data ?? []).sort((a, b) => {
+        const indexA = STATION_ORDER.indexOf(a.code);
+        const indexB = STATION_ORDER.indexOf(b.code);
+        return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+      });
+
+      set({ assignedStations: sortedStations });
+      return sortedStations;
     } catch (err) {
       console.error('Fetch all stations error:', err);
       return [];

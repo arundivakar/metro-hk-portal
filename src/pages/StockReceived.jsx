@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
-import { ROLES, ALS_GROUPS } from '../lib/constants';
+import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import toast from 'react-hot-toast';
 
 const today = new Date().toISOString().split('T')[0];
@@ -69,17 +69,27 @@ export default function StockReceived() {
             .select('*, inventory_items(name,unit), stations(code,name), users_profile(full_name)')
             .neq('supplier', 'Opening Stock Initialization')
             .order('received_date', { ascending: false }).limit(200),
-          supabase.from('stations').select('id,code,name').eq('is_active', true).order('code'),
+          supabase.from('stations').select('id,code,name').eq('is_active', true),
         ]);
         setAllLogs(logsRes.data ?? []);
-        setStations(stationsRes.data ?? []);
+        const sortedStations = (stationsRes.data ?? []).sort((a, b) => {
+          const indexA = STATION_ORDER.indexOf(a.code);
+          const indexB = STATION_ORDER.indexOf(b.code);
+          return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+        });
+        setStations(sortedStations);
       } else if (selectedStation?.id) {
         const [data, stationsRes] = await Promise.all([
           fetchStockReceived(selectedStation.id),
-          supabase.from('stations').select('id,code,name').eq('is_active', true).order('code'),
+          supabase.from('stations').select('id,code,name').eq('is_active', true),
         ]);
         setLogs(data);
-        setStations(stationsRes.data ?? []);
+        const sortedStations = (stationsRes.data ?? []).sort((a, b) => {
+          const indexA = STATION_ORDER.indexOf(a.code);
+          const indexB = STATION_ORDER.indexOf(b.code);
+          return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+        });
+        setStations(sortedStations);
       }
     } catch (err) {
       console.error(err);
