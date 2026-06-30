@@ -14,7 +14,7 @@ SELECT
     r.tender_year,
     r.brand AS brand_name,
     r.unit_rate,
-    COALESCE(SUM(si.current_stock), 0) AS current_stock
+    COALESCE(SUM(COALESCE(si.current_stock, 0)), 0) AS current_stock
 FROM inventory_items i
 LEFT JOIN rate_master r ON i.rate_master_id = r.id
 LEFT JOIN station_inventory si ON i.id = si.item_id
