@@ -182,10 +182,6 @@ export default function Inventory() {
       return false;
     }
 
-    const allowedStations = ALS_GROUPS[alsGroupFilter];
-    if ((role === ROLES.ALS || role === ROLES.HKTL) && allowedStations && !allowedStations.includes(row.station_code)) {
-      return false;
-    }
     const name = (row.item_name ?? '').toLowerCase();
     const matchSearch = !search || name.includes(search.toLowerCase());
     const matchCategory = categoryFilter === 'All' || row.category === categoryFilter;
