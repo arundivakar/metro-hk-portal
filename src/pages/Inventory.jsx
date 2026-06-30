@@ -52,14 +52,27 @@ export default function Inventory() {
   const loadAllInventory = async () => {
     setAlsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('v_station_inventory_summary')
-        .select('*')
-        .order('station_code', { ascending: true })
-        .order('item_name', { ascending: true })
-        .limit(10000);
-      if (error) throw error;
-      setAllStationsInventory(data ?? []);
+      let allData = [];
+      let from = 0;
+      const step = 1000;
+      
+      while (true) {
+        const { data, error } = await supabase
+          .from('v_station_inventory_summary')
+          .select('*')
+          .order('station_code', { ascending: true })
+          .order('item_name', { ascending: true })
+          .range(from, from + step - 1);
+          
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        
+        allData = allData.concat(data);
+        if (data.length < step) break;
+        from += step;
+      }
+      
+      setAllStationsInventory(allData);
     } catch (err) {
       console.error('ALS inventory error:', err);
     } finally {
