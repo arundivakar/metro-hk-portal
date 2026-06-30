@@ -138,11 +138,10 @@
     var(--color-primary-700) 55%,
     var(--color-primary-600) 100%);
   border-radius: var(--card-radius);
-  /* ↓ Reduced from p-6/p-8 → p-4/p-5 — approx 30% height reduction */
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-5) var(--space-6);
   color: white;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   overflow: hidden;
   position: relative;
