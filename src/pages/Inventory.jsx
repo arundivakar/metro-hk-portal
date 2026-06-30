@@ -175,6 +175,9 @@ export default function Inventory() {
   let filteredData = rawData.filter((row) => {
     // Completely hide items before 2024-25 from the Inventory tab
     const tYearStr = row.tender_year || '';
+    if (tYearStr.toLowerCase().includes('before 2024')) {
+      return false;
+    }
     const match = tYearStr.match(/^(\d{4})/);
     if (match && parseInt(match[1], 10) < 2024) {
       return false;

@@ -80,6 +80,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
   allItems.forEach(item => {
     // Exclude items before 2024
     const tYearStr = item.rate_master?.tender_year || '';
+    if (tYearStr.toLowerCase().includes('before 2024')) return;
     const startYear = parseInt(tYearStr.split('-')[0]) || 0;
     if (startYear > 0 && startYear < 2024) return;
 
@@ -108,6 +109,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     // Ensure the item exists (consumed items not in master — shouldn't happen but safe)
     if (!groupedItems[itemId]) {
       const tYearStr = log.inventory_items?.rate_master?.tender_year || '';
+      if (tYearStr.toLowerCase().includes('before 2024')) return;
       const startYear = parseInt(tYearStr.split('-')[0]) || 0;
       // Skip if it's explicitly before 2024
       if (startYear > 0 && startYear < 2024) return;

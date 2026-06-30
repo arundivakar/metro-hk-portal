@@ -83,6 +83,7 @@ export default function MonthlyBill() {
     // Initialise every active master item
     allItems.forEach(item => {
       const tYearStr = item.rate_master?.tender_year || '';
+      if (tYearStr.toLowerCase().includes('before 2024')) return;
       const startYear = parseInt(tYearStr.split('-')[0]) || 0;
       if (startYear > 0 && startYear < 2024) return; // Exclude < 2024
 
@@ -111,6 +112,7 @@ export default function MonthlyBill() {
 
       if (!groupedItems[itemId]) {
         const tYearStr = log.inventory_items?.rate_master?.tender_year || '';
+        if (tYearStr.toLowerCase().includes('before 2024')) return;
         const startYear = parseInt(tYearStr.split('-')[0]) || 0;
         if (startYear > 0 && startYear < 2024) return; // Skip if it's explicitly before 2024
 
