@@ -118,14 +118,14 @@ function StationDashboard({ station }) {
   ];
 
   const lowStockData = lowStock.map((row) => {
-    const dbUnit   = row.inventory_items?.unit ?? 'Nos';
+    const dbUnit   = row.unit ?? 'Nos';
     const dispUnit = getDisplayUnit(dbUnit);
     const curDisp  = toDisplayValue(row.current_stock, dbUnit);
-    const minDisp  = toDisplayValue(row.inventory_items?.min_stock_level ?? 0, dbUnit);
+    const minDisp  = toDisplayValue(row.min_stock_level ?? 0, dbUnit);
     const fmt = (v) => dispUnit === 'Nos' ? `${Math.round(v)} Nos` : `${v.toFixed(2)} ${dispUnit}`;
     return {
-      id: row.id,
-      item: row.inventory_items?.name ?? '—',
+      id: row.item_id,
+      item: row.item_name ?? '—',
       current: fmt(curDisp),
       minimum: fmt(minDisp),
       _rowClass: 'low-stock-row',

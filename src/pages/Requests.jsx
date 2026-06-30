@@ -227,7 +227,12 @@ export default function Requests() {
             <select id="req-item" className="form-control" value={form.item_id}
               onChange={(e) => setForm((f) => ({ ...f, item_id: e.target.value }))} required>
               <option value="">— Select item —</option>
-              {items.map((i) => (
+              {items
+                .filter(i => {
+                  const invRecord = inventory.find(inv => inv.item_id === i.id);
+                  return invRecord && Number(invRecord.current_stock) > 0;
+                })
+                .map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.name} ({i.unit}){i.rate_master?.tender_year ? ` [${i.rate_master.tender_year}]` : ''}
                 </option>
