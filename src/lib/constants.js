@@ -94,8 +94,6 @@ export const NAV_ITEMS = {
     { path: '/inventory', label: 'All Inventory', icon: 'Package' },
     { path: '/requests', label: 'All Requests', icon: 'ClipboardList' },
     { path: '/approvals', label: 'Approvals', icon: 'CheckSquare' },
-    { path: '/assets', label: 'Asset Status', icon: 'Boxes' },
-    { path: '/reports', label: 'Reports', icon: 'BarChart2' },
     { path: '/settings', label: 'Data Import', icon: 'Database' },
   ],
   [ROLES.SC]: [

@@ -269,6 +269,7 @@ function StationDashboard({ station }) {
 
 // ─── ALS Dashboard ────────────────────────────────────────────────────────────
 function ALSDashboard() {
+  const { role } = useAuthStore();
   const { alsGroupFilter } = useStationStore();
   const [stations, setStations] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
@@ -375,7 +376,7 @@ function ALSDashboard() {
     <>
       <div className="station-hero-banner animate-fade-in" style={{ marginBottom: 'var(--space-6)' }}>
         <div style={{ zIndex: 2, position: 'relative' }}>
-          <div className="station-hero-title">ALS Dashboard 📊</div>
+          <div className="station-hero-title">{role === ROLES.ALS ? 'ALS Dashboard' : 'HKTL Dashboard'} 📊</div>
           <div className="station-hero-sub">Complete system overview — all 25 stations</div>
         </div>
         <Activity size={48} style={{ opacity: 0.2, zIndex: 1, position: 'relative' }} />
