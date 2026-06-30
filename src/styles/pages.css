@@ -521,3 +521,106 @@
     width: fit-content;
   }
 }
+/* ── Base styles for .dashboard-welcome (desktop) ── */
+.dashboard-welcome {
+  background: linear-gradient(135deg,
+    var(--color-primary-800) 0%,
+    var(--color-primary-700) 55%,
+    var(--color-primary-600) 100%);
+  border-radius: var(--card-radius);
+  padding: var(--space-4) var(--space-6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 18px rgba(0,111,108,0.28);
+  min-height: 96px;
+  gap: var(--space-4);
+}
+
+.dashboard-welcome::before {
+  content: '';
+  position: absolute;
+  right: -40px; top: -40px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.03);
+  pointer-events: none;
+}
+.dashboard-welcome::after {
+  content: '';
+  position: absolute;
+  right: 80px; bottom: -70px;
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.025);
+  pointer-events: none;
+}
+
+.dashboard-welcome-title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.dashboard-welcome-sub {
+  font-size: var(--font-size-sm);
+  color: rgba(255,255,255,0.65);
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.dashboard-welcome-station {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255,255,255,0.11);
+  border: 1px solid rgba(255,255,255,0.16);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: white;
+  margin-top: var(--space-3);
+}
+
+/* ── Mobile — ≤768px ── */
+@media (max-width: 768px) {
+  .dashboard-welcome {
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: unset;
+    padding: var(--space-4);
+    gap: var(--space-1);
+  }
+  /* Hide the Activity icon — it squeezes content as a flex sibling */
+  .dashboard-welcome > svg {
+    display: none !important;
+  }
+  .dashboard-welcome-title {
+    font-size: var(--font-size-lg);
+  }
+  .dashboard-welcome-sub {
+    font-size: var(--font-size-xs);
+  }
+  .dashboard-welcome-station {
+    font-size: 11px;
+    padding: 3px 10px;
+    margin-top: var(--space-2);
+  }
+  /* Verify Stock button inside the banner */
+  .dashboard-welcome .btn {
+    font-size: var(--font-size-xs) !important;
+    min-height: 28px !important;
+    padding: 0 var(--space-3) !important;
+    background: rgba(255,255,255,0.12) !important;
+    border-color: rgba(255,255,255,0.25) !important;
+    color: white !important;
+    width: fit-content;
+    margin-top: var(--space-2);
+  }
+}
