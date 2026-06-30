@@ -173,6 +173,13 @@ export default function Inventory() {
   const isLoadingData = (role === ROLES.ALS || role === ROLES.HKTL) ? alsLoading : isLoading;
 
   let filteredData = rawData.filter((row) => {
+    // Completely hide items before 2024-25 from the Inventory tab
+    const tYearStr = row.tender_year || '';
+    const match = tYearStr.match(/^(\d{4})/);
+    if (match && parseInt(match[1], 10) < 2024) {
+      return false;
+    }
+
     const allowedStations = ALS_GROUPS[alsGroupFilter];
     if ((role === ROLES.ALS || role === ROLES.HKTL) && allowedStations && !allowedStations.includes(row.station_code)) {
       return false;
