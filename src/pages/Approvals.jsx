@@ -44,21 +44,31 @@ export default function Approvals() {
         .gte('created_at', monthStart)
         .neq('status', 'rejected');
 
+      let consumptionQuery = supabase.from('consumption_logs')
+        .select(`quantity_used, stations (code), inventory_items (rate_master (unit_rate))`)
+        .gte('consumption_date', monthStart);
+
       if (role === ROLES.SC) {
         query = query.eq('station_id', selectedStation?.id);
+        consumptionQuery = consumptionQuery.eq('station_id', selectedStation?.id);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const [reqRes, consRes] = await Promise.all([query, consumptionQuery]);
+      
+      if (reqRes.error) throw reqRes.error;
+      if (consRes.error) throw consRes.error;
 
       let approved = 0;
       let pipeline = 0;
-      let validData = data || [];
+      
+      let validData = reqRes.data || [];
+      let validConsData = consRes.data || [];
 
       if (role === ROLES.ALS) {
         const allowedStations = ALS_GROUPS[alsGroupFilter];
         if (allowedStations) {
            validData = validData.filter(r => r.stations && allowedStations.includes(r.stations.code));
+           validConsData = validConsData.filter(r => r.stations && allowedStations.includes(r.stations.code));
         }
       }
 
@@ -69,6 +79,12 @@ export default function Approvals() {
         } else {
           approved += cost;
         }
+      });
+      
+      validConsData.forEach(r => {
+        const rate = r.inventory_items?.rate_master?.unit_rate || 0;
+        const cost = (r.quantity_used || 0) * rate;
+        approved += cost;
       });
 
       setExpenditure({ approved, pipeline });
