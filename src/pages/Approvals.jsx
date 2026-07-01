@@ -25,8 +25,57 @@ export default function Approvals() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [scVerified, setScVerified] = useState(false);
+  const [expenditure, setExpenditure] = useState({ approved: 0, pipeline: 0 });
 
-  useEffect(() => { loadRequests(); }, [selectedStation?.id, role, alsGroupFilter]); // eslint-disable-line
+  useEffect(() => { 
+    loadRequests(); 
+    if (role === ROLES.SC || role === ROLES.ALS) {
+      loadExpenditure();
+    }
+  }, [selectedStation?.id, role, alsGroupFilter]); // eslint-disable-line
+
+  const loadExpenditure = async () => {
+    try {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
+      let query = supabase.from('consumable_requests')
+        .select(`quantity, unit_rate, status, stations (code)`)
+        .gte('created_at', monthStart)
+        .neq('status', 'rejected');
+
+      if (role === ROLES.SC) {
+        query = query.eq('station_id', selectedStation?.id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      let approved = 0;
+      let pipeline = 0;
+      let validData = data || [];
+
+      if (role === ROLES.ALS) {
+        const allowedStations = ALS_GROUPS[alsGroupFilter];
+        if (allowedStations) {
+           validData = validData.filter(r => r.stations && allowedStations.includes(r.stations.code));
+        }
+      }
+
+      validData.forEach(r => {
+        const cost = (r.quantity || 0) * (r.unit_rate || 0);
+        if (['pending', 'forwarded_sc', 'forwarded_als'].includes(r.status)) {
+          pipeline += cost;
+        } else {
+          approved += cost;
+        }
+      });
+
+      setExpenditure({ approved, pipeline });
+    } catch (err) {
+      console.error('Error loading expenditure:', err);
+    }
+  };
 
   const loadRequests = async () => {
     setIsLoading(true);
@@ -124,9 +173,10 @@ export default function Approvals() {
       });
       if (approvalErr) throw approvalErr;
 
-      toast.success(`Request ${action} successfully!`);
+      toast.success(`Request ${action} successfully`);
       setSelected(null);
       loadRequests();
+      if (role === ROLES.SC || role === ROLES.ALS) loadExpenditure();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -209,8 +259,6 @@ export default function Approvals() {
   if (role === ROLES.HKTL) pageTitle = 'Pending HKTL Approvals';
   if (role === ROLES.ALS) pageTitle = 'Forwarded Requests';
 
-  const pageSubtitle = `${requests.length} request${requests.length !== 1 ? 's' : ''} pending your action`;
-
   const actionLabels = {
     approved: { label: role === ROLES.HKTL ? 'Approve & Forward' : 'Approve', variant: 'success' },
     rejected: { label: 'Reject', variant: 'danger' },
@@ -218,10 +266,35 @@ export default function Approvals() {
     completed: { label: 'Mark as Completed', variant: 'accent' },
   };
 
+  const pageSubtitle = `${requests.length} request${requests.length !== 1 ? 's' : ''} pending your action`;
+
   return (
-    <Layout title={pageTitle} subtitle={pageSubtitle}>
+    <Layout
+      title={pageTitle}
+      subtitle={pageSubtitle}
+    >
+      {(role === ROLES.SC || role === ROLES.ALS) && (
+        <Card style={{ marginBottom: 'var(--space-5)' }}>
+          <CardBody style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center', padding: 'var(--space-4) var(--space-5)' }}>
+            <div>
+              <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>This Month's Approved Spend</div>
+              <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--color-primary-700)', marginTop: 2 }}>
+                ₹{expenditure.approved.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div style={{ width: 1, height: 36, background: 'var(--color-gray-200)' }} className="hide-on-mobile"></div>
+            <div>
+              <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>Awaiting Approval (Pipeline)</div>
+              <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--color-warning-600)', marginTop: 2 }}>
+                ₹{expenditure.pipeline.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       <Card>
-        <CardHeader title={pageTitle} icon={<CheckSquare size={16} />} />
+        <CardHeader title={`Requests (${requests.length})`} icon={<CheckSquare size={16} />} />
         <DataTable
           columns={columns}
           data={requests.map((r) => ({ ...r, id: r.id }))}
