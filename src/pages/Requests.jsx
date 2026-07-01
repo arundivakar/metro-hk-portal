@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ClipboardList, Plus, Camera } from 'lucide-react';
+import { ClipboardList, Plus, Camera, Trash2, Image as ImageIcon } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -35,6 +35,7 @@ export default function Requests() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   useEffect(() => { loadData(); }, [selectedStation?.id, role]); // eslint-disable-line
 
@@ -147,6 +148,18 @@ export default function Requests() {
     }
   };
 
+  const handleDelete = async (requestId) => {
+    if (!window.confirm('Are you sure you want to delete this request?')) return;
+    try {
+      const { error: err } = await supabase.from('consumable_requests').delete().eq('id', requestId);
+      if (err) throw err;
+      toast.success('Request deleted successfully');
+      loadData();
+    } catch (err) {
+      toast.error('Failed to delete request: ' + err.message);
+    }
+  };
+
   const filteredRequests = statusFilter === 'All'
     ? requests
     : requests.filter((r) => r.status === statusFilter);
@@ -164,7 +177,14 @@ export default function Requests() {
     { key: 'estimated_cost', label: 'Est. Cost', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
     { key: 'priority', label: 'Priority', render: (v) => <PriorityBadge priority={v} /> },
     { key: 'status', label: 'Status', render: (v) => <RequestStatusBadge status={v} /> },
-    { key: 'requested_by', label: 'Requested By', render: (_, r) => r.users_profile?.full_name ?? '—' },
+    { key: 'requested_by', label: 'Requested By', render: (_, r) => r.users_profile?.full_name ?? '-' },
+    { key: 'actions', label: '', render: (_, r) => (
+      role === ROLES.HKS && r.status === 'pending' ? (
+        <Button variant="danger" size="sm" onClick={() => handleDelete(r.id)} style={{ padding: '4px 8px' }} title="Delete Request">
+          <Trash2 size={14} />
+        </Button>
+      ) : null
+    ) }
   ];
 
   const STATUS_OPTIONS = ['All', 'pending', 'approved_sc', 'forwarded_als', 'approved_als', 'rejected', 'completed'];
@@ -279,10 +299,8 @@ export default function Requests() {
                 borderRadius: 'var(--radius-md)',
                 padding: 'var(--space-4)',
                 textAlign: 'center',
-                cursor: 'pointer',
                 backgroundColor: 'var(--bg-subtle)'
               }}
-              onClick={() => fileInputRef.current?.click()}
             >
               {imagePreview ? (
                 <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -301,13 +319,35 @@ export default function Requests() {
                 </div>
               ) : (
                 <div style={{ color: 'var(--text-muted)' }}>
-                  <Camera size={32} style={{ margin: '0 auto var(--space-2)', display: 'block' }} />
-                  Click to upload or take a photo
+                  <div style={{ marginBottom: 'var(--space-2)' }}>Attach a photo (optional)</div>
+                  <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'center' }}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                      <Camera size={14} /> Camera
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => galleryInputRef.current?.click()}>
+                      <ImageIcon size={14} /> Gallery
+                    </Button>
+                  </div>
                 </div>
               )}
               <input 
-                id="photo-upload"
+                id="photo-upload-camera"
                 ref={fileInputRef}
+                type="file" 
+                accept="image/*" 
+                capture="environment"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    setImageFile(file);
+                    setImagePreview(URL.createObjectURL(file));
+                  }
+                }}
+              />
+              <input 
+                id="photo-upload-gallery"
+                ref={galleryInputRef}
                 type="file" 
                 accept="image/*" 
                 style={{ display: 'none' }}
