@@ -479,4 +479,5 @@
   .topbar-left   { gap: var(--space-2); }
   .topbar-menu-btn { display: flex; }
   .topbar        { padding: 0 var(--space-4); }
+  .station-name-text { display: none; }
 }

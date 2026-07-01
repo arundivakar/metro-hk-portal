@@ -25,7 +25,7 @@ export default function TopBar({ title, subtitle, actions, onChangeStation, onMe
             <Menu size={19} />
           </button>
         )}
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div className="topbar-title">{title}</div>
           {subtitle && <div className="topbar-subtitle">{subtitle}</div>}
         </div>
@@ -37,7 +37,7 @@ export default function TopBar({ title, subtitle, actions, onChangeStation, onMe
           <div className="topbar-station-chip">
             <MapPin size={11} />
             <span style={{ fontWeight: 700 }}>{selectedStation.code}</span>
-            <span style={{ color: 'var(--color-primary-500)', fontWeight: 400 }}>
+            <span className="station-name-text" style={{ color: 'var(--color-primary-500)', fontWeight: 400 }}>
               {selectedStation.name}
             </span>
             {onChangeStation && (

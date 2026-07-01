@@ -306,10 +306,10 @@ export default function Requests() {
                 </div>
               )}
               <input 
+                id="photo-upload"
                 ref={fileInputRef}
                 type="file" 
                 accept="image/*" 
-                capture="environment" 
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   const file = e.target.files[0];
