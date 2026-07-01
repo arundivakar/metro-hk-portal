@@ -588,7 +588,7 @@
   margin-top: var(--space-3);
 }
 
-/* ── Mobile — ≤768px ── */
+/* ── Mobile — ≤768px ── (single source of truth; previously duplicated across 2 blocks) */
 @media (max-width: 768px) {
   .dashboard-welcome {
     flex-direction: column;
@@ -597,23 +597,38 @@
     padding: var(--space-4);
     gap: var(--space-1);
   }
-  /* Hide the Activity icon — it squeezes content as a flex sibling */
-  .dashboard-welcome > svg {
+
+  /* The text wrapper div must stay full-width or it can shrink to its
+     widest child's width and visually clip the elements below it */
+  .dashboard-welcome > div:first-child {
+    width: 100%;
+  }
+
+  /* Hide the decorative Activity icon — it squeezes content as a flex sibling */
+  .dashboard-welcome .dashboard-hero-icon {
     display: none !important;
   }
+
   .dashboard-welcome-title {
+    display: block;
     font-size: var(--font-size-lg);
   }
+
   .dashboard-welcome-sub {
+    display: block;
     font-size: var(--font-size-xs);
   }
+
   .dashboard-welcome-station {
+    display: inline-flex !important;
     font-size: 11px;
     padding: 3px 10px;
     margin-top: var(--space-2);
   }
-  /* Verify Stock button inside the banner */
+
+  /* Verify Stock / Digital Stock Verification button inside the banner */
   .dashboard-welcome .btn {
+    display: inline-flex !important;
     font-size: var(--font-size-xs) !important;
     min-height: 28px !important;
     padding: 0 var(--space-3) !important;
@@ -622,34 +637,6 @@
     color: white !important;
     width: fit-content;
     margin-top: var(--space-2);
-  }
-}
-/* ── Dashboard hero banner — mobile ── */
-@media (max-width: 768px) {
-  .dashboard-welcome {
-    padding: var(--space-4);
-    min-height: unset;
-    align-items: flex-start;
-  }
-  /* Hide the decorative icon on mobile */
-  .dashboard-hero-icon {
-    display: none !important;
-  }
-  .dashboard-welcome-title {
-    font-size: var(--font-size-lg);
-  }
-  .dashboard-welcome-sub {
-    font-size: var(--font-size-xs);
-  }
-  .dashboard-welcome-station {
-    font-size: 11px;
-    padding: 3px 10px;
-    margin-top: var(--space-2);
-  }
-  .dashboard-welcome .btn {
-    font-size: var(--font-size-xs) !important;
-    min-height: 28px !important;
-    padding: 0 var(--space-3) !important;
   }
 }
 
