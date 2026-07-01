@@ -624,3 +624,43 @@
     margin-top: var(--space-2);
   }
 }
+/* ── Dashboard hero banner — mobile ── */
+@media (max-width: 768px) {
+  .dashboard-welcome {
+    padding: var(--space-4);
+    min-height: unset;
+    align-items: flex-start;
+  }
+  /* Hide the decorative icon on mobile */
+  .dashboard-hero-icon {
+    display: none !important;
+  }
+  .dashboard-welcome-title {
+    font-size: var(--font-size-lg);
+  }
+  .dashboard-welcome-sub {
+    font-size: var(--font-size-xs);
+  }
+  .dashboard-welcome-station {
+    font-size: 11px;
+    padding: 3px 10px;
+    margin-top: var(--space-2);
+  }
+  .dashboard-welcome .btn {
+    font-size: var(--font-size-xs) !important;
+    min-height: 28px !important;
+    padding: 0 var(--space-3) !important;
+  }
+}
+
+/* ALS dashboard banner — same fix */
+@media (max-width: 768px) {
+  .station-hero-banner {
+    padding: var(--space-4);
+    min-height: unset;
+    align-items: flex-start;
+  }
+  .station-hero-banner > svg {
+    display: none !important;
+  }
+}
