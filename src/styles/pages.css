@@ -148,6 +148,10 @@
   box-shadow: 0 4px 18px rgba(0,111,108,0.28);
   /* Desktop: compact fixed height */
   min-height: 96px;
+  /* Same fix as .dashboard-welcome — overflow:hidden strips this flex item's
+     default min-height protection inside main-content's flex column, letting
+     it get crushed toward 0 whenever page content exceeds the viewport. */
+  flex-shrink: 0;
 }
 
 /* Mobile: let the banner grow to fit its content naturally */
@@ -357,6 +361,9 @@
   border-radius: var(--card-radius);
   overflow: hidden;
   box-shadow: var(--card-shadow);
+  /* Same overflow:hidden + flex-child-of-main-content shape as .dashboard-welcome
+     — pre-empting the same crush-to-0-height bug on this section. */
+  flex-shrink: 0;
 }
 
 .lifecycle-stage {
@@ -538,6 +545,13 @@
   box-shadow: 0 4px 18px rgba(0,111,108,0.28);
   min-height: 96px;
   gap: var(--space-4);
+  /* Without this, .dashboard-welcome's own `overflow: hidden` (needed to clip
+     the decorative circles below) disables the browser's default "don't
+     shrink below content size" protection for flex items. Since this sits
+     inside main-content (display:flex; flex-direction:column; overflow:scroll),
+     it would otherwise get crushed toward 0 height whenever total page
+     content exceeds the viewport — which is exactly what was happening. */
+  flex-shrink: 0;
 }
 
 .dashboard-welcome::before {
