@@ -11,6 +11,7 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { supabase } from '../lib/supabase';
 import { ROLES, REQUEST_STATUS, APPROVAL_THRESHOLD, ALS_GROUPS } from '../lib/constants';
+import { toDisplayValue, toBillingQty } from '../utils/units';
 import toast from 'react-hot-toast';
 
 export default function Approvals() {
@@ -40,12 +41,12 @@ export default function Approvals() {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
       let query = supabase.from('consumable_requests')
-        .select(`quantity, unit_rate, status, stations (code)`)
+        .select(`quantity, unit_rate, status, stations (code), inventory_items (unit, rate_master (nos_per_kg))`)
         .gte('created_at', monthStart)
         .neq('status', 'rejected');
 
       let consumptionQuery = supabase.from('consumption_logs')
-        .select(`quantity_used, stations (code), inventory_items (rate_master (unit_rate))`)
+        .select(`quantity_used, stations (code), inventory_items (unit, rate_master (unit_rate, nos_per_kg, tender_year))`)
         .gte('consumption_date', monthStart);
 
       if (role === ROLES.SC) {
@@ -73,17 +74,22 @@ export default function Approvals() {
       }
 
       validData.forEach(r => {
-        const cost = (r.quantity || 0) * (r.unit_rate || 0);
+        const nosPerKg = r.inventory_items?.rate_master?.nos_per_kg || null;
+        const cost = toBillingQty(r.quantity, r.inventory_items?.unit, nosPerKg) * (r.unit_rate || 0);
         if (['pending', 'forwarded_sc', 'forwarded_als'].includes(r.status)) {
           pipeline += cost;
-        } else {
-          approved += cost;
         }
       });
       
       validConsData.forEach(r => {
+        const tYearStr = r.inventory_items?.rate_master?.tender_year || '';
+        if (tYearStr.toLowerCase().includes('before 2024')) return;
+        const startYear = parseInt(tYearStr.split('-')[0]) || 0;
+        if (startYear > 0 && startYear < 2024) return;
+        
         const rate = r.inventory_items?.rate_master?.unit_rate || 0;
-        const cost = (r.quantity_used || 0) * rate;
+        const nosPerKg = r.inventory_items?.rate_master?.nos_per_kg || null;
+        const cost = toBillingQty(r.quantity_used, r.inventory_items?.unit, nosPerKg) * rate;
         approved += cost;
       });
 

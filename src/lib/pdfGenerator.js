@@ -2,29 +2,11 @@ import { jsPDF } from 'jspdf';
 import { applyPlugin } from 'jspdf-autotable';
 applyPlugin(jsPDF);
 import { ALS_GROUPS } from './constants';
-
-/**
- * Convert raw base-unit quantity to billing quantity.
- * Items are stored in ml/g/Nos in the DB.
- * Bills are expressed in Ltr/Kg/Nos (or Kg for nos_per_kg items).
- *
- *  ml  → divide by 1000 → Ltr
- *  g   → divide by 1000 → Kg
- *  Nos with nos_per_kg → divide by nos_per_kg → Kg (e.g. garbage covers)
- *  Nos without nos_per_kg → 1:1 → Nos
- */
-export function toBillingQty(rawQty, dbUnit, nosPerKg) {
-  if (dbUnit === 'ml') return rawQty / 1000;              // ml → Ltr
-  if (dbUnit === 'g')  return rawQty / 1000;              // g  → Kg
-  if (nosPerKg && nosPerKg > 0) return rawQty / nosPerKg; // Nos → Kg (garbage covers etc.)
-  return rawQty;                                           // Nos → Nos
-}
+import { toBillingQty, getDisplayUnit } from '../utils/units';
 
 export function billingUnitLabel(dbUnit, nosPerKg) {
-  if (dbUnit === 'ml') return 'Ltr';
-  if (dbUnit === 'g')  return 'Kg';
   if (nosPerKg && nosPerKg > 0) return 'Kg';
-  return 'Nos';
+  return getDisplayUnit(dbUnit);
 }
 
 export const generateMonthlyBillPdf = async (month, year, consumptionData, allItems = []) => {

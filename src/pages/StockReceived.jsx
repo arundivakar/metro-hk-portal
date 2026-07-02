@@ -12,6 +12,7 @@ import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
+import { toDisplayValue, toBillingQty } from '../utils/units';
 import toast from 'react-hot-toast';
 
 const today = new Date().toISOString().split('T')[0];
@@ -362,7 +363,7 @@ export default function StockReceived() {
           </div>
           {selectedItem && form.quantity && form.unit_rate && (
             <Alert variant="info" style={{ marginBottom: 'var(--space-3)' }}>
-              Total Value: ₹{(parseFloat(form.quantity) * parseFloat(form.unit_rate)).toFixed(2)}
+              Total Value: ₹{(toBillingQty(form.quantity, selectedItem.unit, selectedItem?.rate_master?.nos_per_kg) * parseFloat(form.unit_rate)).toFixed(2)}
             </Alert>
           )}
           <div className="form-group">

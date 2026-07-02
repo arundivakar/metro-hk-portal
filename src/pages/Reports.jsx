@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { ROLES, ALS_GROUPS } from '../lib/constants';
 import { supabase } from '../lib/supabase';
+import { toDisplayValue, getDisplayUnit } from '../utils/units';
 
 export default function Reports() {
   const { role } = useAuthStore();
@@ -57,9 +58,9 @@ export default function Reports() {
       const damageMap = {};
       (damageData || []).forEach(d => {
         if (!damageMap[d.item_id]) {
-          damageMap[d.item_id] = { name: d.inventory_items?.name, unit: d.inventory_items?.unit, total: 0 };
+          damageMap[d.item_id] = { name: d.inventory_items?.name, unit: getDisplayUnit(d.inventory_items?.unit), total: 0 };
         }
-        damageMap[d.item_id].total += Number(d.quantity);
+        damageMap[d.item_id].total += toDisplayValue(d.quantity, d.inventory_items?.unit);
       });
       
       const topDamaged = Object.values(damageMap).sort((a, b) => b.total - a.total).slice(0, 10);

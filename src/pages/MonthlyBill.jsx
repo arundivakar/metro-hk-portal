@@ -6,7 +6,8 @@ import Button from '../components/ui/Button';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS } from '../lib/constants';
-import { generateMonthlyBillPdf, toBillingQty, billingUnitLabel } from '../lib/pdfGenerator';
+import { generateMonthlyBillPdf, billingUnitLabel } from '../lib/pdfGenerator';
+import { toBillingQty } from '../utils/units';
 import toast from 'react-hot-toast';
 import { FileText, Download, Calculator } from 'lucide-react';
 

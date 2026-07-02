@@ -22,9 +22,20 @@
  * @returns {string}    - Display unit ('Ltr' | 'Kg' | 'Nos')
  */
 export function getDisplayUnit(unit) {
-  if (unit === 'ml' || unit === 'mL' || unit === 'L' || unit === 'Ltr') return 'Ltr';
-  if (unit === 'g'  || unit === 'Kg' || unit === 'kg')                    return 'Kg';
+  if (!unit) return 'Nos';
+  const u = unit.toLowerCase();
+  if (u === 'ml' || u === 'ltr' || u === 'l') return 'Ltr';
+  if (u === 'g' || u === 'kg') return 'Kg';
   return 'Nos';
+}
+
+/**
+ * Convert raw base-unit quantity to billing quantity.
+ * Safely handles count items (Nos) that are billed per Kg based on nosPerKg.
+ */
+export function toBillingQty(rawQty, dbUnit, nosPerKg) {
+  if (nosPerKg && nosPerKg > 0) return rawQty / nosPerKg; // Nos → Kg
+  return toDisplayValue(rawQty, dbUnit);
 }
 
 /**

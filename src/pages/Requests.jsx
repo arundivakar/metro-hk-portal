@@ -12,6 +12,7 @@ import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
 import { ROLES, PRIORITY, APPROVAL_THRESHOLD, ALS_GROUPS } from '../lib/constants';
+import { toDisplayValue, toBillingQty } from '../utils/units';
 import toast from 'react-hot-toast';
 
 const today = new Date().toISOString().split('T')[0];
@@ -86,7 +87,7 @@ export default function Requests() {
 
   const selectedItem = items.find((i) => i.id === form.item_id);
   const unitRate = selectedItem?.rate_master?.unit_rate ?? 0;
-  const estimatedCost = form.quantity && unitRate ? parseFloat(form.quantity) * unitRate : 0;
+  const estimatedCost = form.quantity && unitRate ? toBillingQty(form.quantity, selectedItem?.unit, selectedItem?.rate_master?.nos_per_kg) * unitRate : 0;
   const willForward = estimatedCost > APPROVAL_THRESHOLD;
 
   const selectedItemStock = inventory.find(i => i.item_id === form.item_id)?.current_stock || 0;

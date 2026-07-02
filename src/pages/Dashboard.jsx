@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { toDisplayValue, getDisplayUnit } from '../utils/units';
+import { toDisplayValue, getDisplayUnit, toBillingQty } from '../utils/units';
 import {
   Package, PackagePlus, TrendingDown, AlertTriangle,
   ClipboardList, Clock, Activity, Building2,
@@ -38,10 +38,10 @@ function StationDashboard({ station }) {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
       const [received, consumed, requests, recentStock, recentConsumption] = await Promise.all([
-        supabase.from('stock_received').select('quantity', { count: 'exact', head: false })
+        supabase.from('stock_received').select('quantity, inventory_items(unit)', { count: 'exact', head: false })
           .eq('station_id', sid).gte('received_date', monthStart)
           .neq('supplier', 'Opening Stock Initialization'),
-        supabase.from('consumption_logs').select('quantity_used', { count: 'exact', head: false })
+        supabase.from('consumption_logs').select('quantity_used, inventory_items(unit)', { count: 'exact', head: false })
           .eq('station_id', sid).gte('consumption_date', monthStart),
         supabase.from('consumable_requests').select('id', { count: 'exact', head: false })
           .eq('station_id', sid).in('status', ['pending', 'forwarded_als']),
@@ -52,8 +52,8 @@ function StationDashboard({ station }) {
           .eq('station_id', sid).order('created_at', { ascending: false }).limit(5),
       ]);
 
-      const receivedTotal = (received.data ?? []).reduce((s, r) => s + Number(r.quantity), 0);
-      const consumedTotal = (consumed.data ?? []).reduce((s, r) => s + Number(r.quantity_used), 0);
+      const receivedTotal = (received.data ?? []).reduce((s, r) => s + toDisplayValue(r.quantity, r.inventory_items?.unit), 0);
+      const consumedTotal = (consumed.data ?? []).reduce((s, r) => s + toDisplayValue(r.quantity_used, r.inventory_items?.unit), 0);
 
       // Merge and sort recent transactions
       const txs = [
@@ -351,7 +351,7 @@ function ALSDashboard() {
       } else {
         const { data } = await supabase
           .from('consumption_logs')
-          .select('*, inventory_items(name, unit, rate_master(unit_rate))')
+          .select('*, inventory_items(name, unit, rate_master(unit_rate, nos_per_kg))')
           .eq('station_id', selectedStationDetail.id)
           .gte('consumption_date', startDate)
           .lte('consumption_date', endDate);
@@ -472,7 +472,7 @@ function ALSDashboard() {
               <div>
                 <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-1)' }}>Total Estimated Cost</div>
                 <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, color: 'var(--color-danger-600)' }}>
-                  ₹{stationConsumption.reduce((sum, r) => sum + (Number(r.quantity_used) * Number(r.inventory_items?.rate_master?.unit_rate || 0)), 0).toFixed(2)}
+                  ₹{stationConsumption.reduce((sum, r) => sum + (toBillingQty(r.quantity_used, r.inventory_items?.unit, r.inventory_items?.rate_master?.nos_per_kg) * Number(r.inventory_items?.rate_master?.unit_rate || 0)), 0).toFixed(2)}
                 </div>
               </div>
               <input 
@@ -495,7 +495,7 @@ function ALSDashboard() {
                 }},
                 { key: 'cost', label: 'Estimated Cost', render: (_, r) => {
                   const rate = r.inventory_items?.rate_master?.unit_rate || 0;
-                  return rate > 0 ? `₹${(Number(r.quantity_used) * rate).toFixed(2)}` : '—';
+                  return rate > 0 ? `₹${(toBillingQty(r.quantity_used, r.inventory_items?.unit, r.inventory_items?.rate_master?.nos_per_kg) * rate).toFixed(2)}` : '—';
                 }},
               ]}
               data={stationConsumption.map(r => ({ ...r, id: r.id }))}
