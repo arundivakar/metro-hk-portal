@@ -51,7 +51,6 @@ export default function Approvals() {
 
       if (role === ROLES.SC) {
         query = query.eq('station_id', selectedStation?.id);
-        consumptionQuery = consumptionQuery.eq('station_id', selectedStation?.id);
       }
 
       const [reqRes, consRes] = await Promise.all([query, consumptionQuery]);
@@ -60,6 +59,7 @@ export default function Approvals() {
       if (consRes.error) throw consRes.error;
 
       let approved = 0;
+      let stationApproved = 0;
       let pipeline = 0;
       
       let validData = reqRes.data || [];
@@ -91,9 +91,12 @@ export default function Approvals() {
         const nosPerKg = r.inventory_items?.rate_master?.nos_per_kg || null;
         const cost = toBillingQty(r.quantity_used, r.inventory_items?.unit, nosPerKg) * rate;
         approved += cost;
+        if (selectedStation && r.stations?.code === selectedStation.code) {
+          stationApproved += cost;
+        }
       });
 
-      setExpenditure({ approved, pipeline });
+      setExpenditure({ approved, stationApproved, pipeline });
     } catch (err) {
       console.error('Error loading expenditure:', err);
     }
@@ -299,11 +302,22 @@ export default function Approvals() {
         <Card style={{ marginBottom: 'var(--space-5)' }}>
           <CardBody style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center', padding: 'var(--space-4) var(--space-5)' }}>
             <div>
-              <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>This Month's Approved Spend</div>
+              <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>This Month's Spend (All Stations)</div>
               <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--color-primary-700)', marginTop: 2 }}>
                 ₹{expenditure.approved.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
+            {selectedStation && selectedStation.code !== 'ALL' && (
+              <>
+                <div style={{ width: 1, height: 36, background: 'var(--color-gray-200)' }} className="hide-on-mobile"></div>
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>{selectedStation.code} Spend</div>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--color-primary-700)', marginTop: 2 }}>
+                    ₹{(expenditure.stationApproved || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </>
+            )}
             <div style={{ width: 1, height: 36, background: 'var(--color-gray-200)' }} className="hide-on-mobile"></div>
             <div>
               <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>Awaiting Approval (Pipeline)</div>
