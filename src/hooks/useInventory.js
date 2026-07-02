@@ -123,6 +123,8 @@ export function useInventory(stationId) {
         category: payload.category,
         unit: payload.unit,
         unit_rate: payload.unit_rate,
+        base_rate: payload.base_rate,
+        gst_percent: payload.gst_percent,
         tender_year: payload.tender_year,
         brand: payload.brand || null,
         remarks: payload.remarks || null

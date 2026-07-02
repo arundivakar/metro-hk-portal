@@ -51,7 +51,7 @@ export default function StockReceived() {
   });
 
   const [newItemForm, setNewItemForm] = useState({
-    item_name: '', category: 'Consumable', unit: 'Nos', unit_rate: '', tender_year: '', brand: '', remarks: ''
+    item_name: '', category: 'Consumable', unit: 'Nos', base_rate: '', gst_percent: '18', unit_rate: '', tender_year: '', brand: '', remarks: ''
   });
 
   useEffect(() => {
@@ -138,11 +138,13 @@ export default function StockReceived() {
     try {
       await addNewCatalogueItem({
         ...newItemForm,
-        unit_rate: parseFloat(newItemForm.unit_rate)
+        base_rate: parseFloat(newItemForm.base_rate) || 0,
+        gst_percent: parseFloat(newItemForm.gst_percent) || 0,
+        unit_rate: parseFloat(newItemForm.unit_rate) || 0
       });
       toast.success('New item added to master catalogue!');
       setShowNewItemForm(false);
-      setNewItemForm({ item_name: '', category: 'Consumable', unit: 'Nos', unit_rate: '', tender_year: '', brand: '', remarks: '' });
+      setNewItemForm({ item_name: '', category: 'Consumable', unit: 'Nos', base_rate: '', gst_percent: '18', unit_rate: '', tender_year: '', brand: '', remarks: '' });
       loadData(); // Refresh the items list
     } catch (err) {
       setError(err.message);
@@ -426,11 +428,39 @@ export default function StockReceived() {
             </div>
           </div>
 
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="ni-base-rate">Base Price (₹)</label>
+              <input id="ni-base-rate" type="number" min="0" step="0.01" className="form-control"
+                value={newItemForm.base_rate} 
+                onChange={(e) => {
+                  const br = parseFloat(e.target.value) || 0;
+                  const gst = parseFloat(newItemForm.gst_percent) || 0;
+                  const ur = (br + (br * gst / 100)).toFixed(2);
+                  setNewItemForm(f => ({ ...f, base_rate: e.target.value, unit_rate: ur }));
+                }} 
+                required 
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="ni-gst">GST (%)</label>
+              <input id="ni-gst" type="number" min="0" step="0.01" className="form-control"
+                value={newItemForm.gst_percent} 
+                onChange={(e) => {
+                  const gst = parseFloat(e.target.value) || 0;
+                  const br = parseFloat(newItemForm.base_rate) || 0;
+                  const ur = (br + (br * gst / 100)).toFixed(2);
+                  setNewItemForm(f => ({ ...f, gst_percent: e.target.value, unit_rate: ur }));
+                }} 
+                required 
+              />
+            </div>
+          </div>
+
           <div className="form-grid">
             <div className="form-group">
-              <label className="form-label form-label-required" htmlFor="ni-rate">Unit Rate (₹)</label>
-              <input id="ni-rate" type="number" min="0" step="0.01" className="form-control"
-                value={newItemForm.unit_rate} onChange={(e) => setNewItemForm(f => ({ ...f, unit_rate: e.target.value }))} required />
+              <label className="form-label" htmlFor="ni-rate">Final Price with GST (₹)</label>
+              <input id="ni-rate" type="number" className="form-control"
+                value={newItemForm.unit_rate} readOnly style={{ backgroundColor: 'var(--color-gray-100)' }} />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="ni-tender">Tender Year</label>
