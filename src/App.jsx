@@ -134,7 +134,7 @@ export default function App() {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS, ROLES.HKTL]}>
+            <ProtectedRoute allowedRoles={[ROLES.ALS]}>
               <DataInitialization />
             </ProtectedRoute>
           }
