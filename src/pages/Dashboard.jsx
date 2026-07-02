@@ -287,8 +287,34 @@ function ALSDashboard() {
 
       if (stErr) throw stErr;
 
+      // Fetch global consumption for the current month to show spend on station cards
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const { data: allLogs } = await supabase
+        .from('consumption_logs')
+        .select('station_id, quantity_used, inventory_items(unit, rate_master(unit_rate, nos_per_kg, tender_year))')
+        .gte('consumption_date', monthStart);
+
+      const spendByStation = {};
+      if (allLogs) {
+        allLogs.forEach(r => {
+           // Apply tender_year filter to match Approvals logic
+           const tYearStr = r.inventory_items?.rate_master?.tender_year || '';
+           if (tYearStr.toLowerCase().includes('before 2024')) return;
+           const startYear = parseInt(tYearStr.split('-')[0]) || 0;
+           if (startYear > 0 && startYear < 2024) return;
+           
+           const rate = r.inventory_items?.rate_master?.unit_rate || 0;
+           const nosPerKg = r.inventory_items?.rate_master?.nos_per_kg || null;
+           const cost = toBillingQty(r.quantity_used, r.inventory_items?.unit, nosPerKg) * rate;
+           
+           spendByStation[r.station_id] = (spendByStation[r.station_id] || 0) + cost;
+        });
+      }
+
       const filteredStations = stationsData
         .filter((s) => !allowedStations || allowedStations.includes(s.code))
+        .map(s => ({ ...s, monthlySpend: spendByStation[s.id] || 0 }))
         .sort((a, b) => {
           const indexA = STATION_ORDER.indexOf(a.code);
           const indexB = STATION_ORDER.indexOf(b.code);
@@ -338,8 +364,10 @@ function ALSDashboard() {
     if (!selectedStationDetail) return;
     setIsModalLoading(true);
     try {
-      const [year, month] = modalMonth.split('-');
-      const startDate = `${year}-${month}-01`;
+      const [yearStr, monthStr] = modalMonth.split('-');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+      const startDate = `${yearStr}-${monthStr}-01`;
       const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
 
       if (modalTab === 'stock') {
@@ -409,10 +437,15 @@ function ALSDashboard() {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                   >
-                    <div className="als-station-code">{s.code}</div>
-                    <div className="als-station-name">{s.name}</div>
-                    <div className="als-station-stats">
-                      <Badge variant="primary">View Details</Badge>
+                    <div className="als-station-info">
+                      <div className="als-station-code">{s.code}</div>
+                      <div className="als-station-name">{s.name}</div>
+                      <div className="als-station-stats" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)' }}>
+                        <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-primary-700)' }}>
+                          ₹{s.monthlySpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <Badge variant="primary">View Details</Badge>
+                      </div>
                     </div>
                   </div>
                 ))}
