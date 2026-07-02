@@ -18,6 +18,7 @@ export default function DataTable({
   onRowClick,
   className = '',
   stickyHeader = true,
+  footer,
 }) {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -122,6 +123,11 @@ export default function DataTable({
             );
           })}
         </tbody>
+        {footer && (
+          <tfoot>
+            {footer}
+          </tfoot>
+        )}
       </table>
     </div>
   );

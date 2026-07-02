@@ -252,26 +252,20 @@ export default function MonthlyBill() {
               data={tableData}
               isLoading={isLoading}
               emptyTitle="No data found for this month"
+              footer={
+                !isLoading && tableData.length > 0 ? (
+                  <tr style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold', fontSize: '13px' }}>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '12px 16px', borderTop: '2px solid var(--color-border)' }}>TOTAL</td>
+                    <td style={{ textAlign: 'center', padding: '12px 16px', borderTop: '2px solid var(--color-border)' }}>₹{totals.alva.toFixed(2)}</td>
+                    <td style={{ textAlign: 'center', padding: '12px 16px', borderTop: '2px solid var(--color-border)' }}>₹{totals.ccuv.toFixed(2)}</td>
+                    <td style={{ textAlign: 'center', padding: '12px 16px', borderTop: '2px solid var(--color-border)' }}>₹{totals.kalr.toFixed(2)}</td>
+                    <td style={{ textAlign: 'center', padding: '12px 16px', borderTop: '2px solid var(--color-border)' }}>₹{totals.emkm.toFixed(2)}</td>
+                    <td style={{ padding: '12px 16px', borderTop: '2px solid var(--color-border)' }}></td>
+                    <td style={{ textAlign: 'right', padding: '12px 16px', borderTop: '2px solid var(--color-border)' }}>₹{totals.grand.toFixed(2)}</td>
+                  </tr>
+                ) : null
+              }
             />
-            {/* Totals Footer row matching the PDF */}
-            {!isLoading && tableData.length > 0 && (
-              <div style={{ 
-                display: 'flex', 
-                backgroundColor: 'var(--color-gray-100)', 
-                borderTop: '2px solid var(--color-border)', 
-                padding: '12px 16px',
-                fontWeight: 'bold',
-                fontSize: '13px'
-              }}>
-                <div style={{ flex: '1 1 auto', textAlign: 'center' }}>TOTAL</div>
-                <div style={{ width: '90px', textAlign: 'center' }}>₹{totals.alva.toFixed(2)}</div>
-                <div style={{ width: '90px', textAlign: 'center' }}>₹{totals.ccuv.toFixed(2)}</div>
-                <div style={{ width: '90px', textAlign: 'center' }}>₹{totals.kalr.toFixed(2)}</div>
-                <div style={{ width: '90px', textAlign: 'center' }}>₹{totals.emkm.toFixed(2)}</div>
-                <div style={{ width: '80px', textAlign: 'center' }}></div>
-                <div style={{ minWidth: '100px', textAlign: 'right' }}>₹{totals.grand.toFixed(2)}</div>
-              </div>
-            )}
           </div>
         </div>
       </Card>
