@@ -28,12 +28,24 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
   try {
     const response = await fetch('/kmrl_logo.png');
     const blob = await response.blob();
-    const base64data = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
+    const base64jpeg = await new Promise((resolve) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        // Fill white background to fix transparent PNG rendering black in jsPDF
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', 1.0));
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
     });
-    doc.addImage(base64data, 'PNG', 14, 5, 30, 15);
+    doc.addImage(base64jpeg, 'JPEG', 14, 5, 30, 15);
   } catch (err) {
     console.warn('Failed to load logo for PDF', err);
   }
@@ -157,7 +169,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
   });
 
   // Footer totals row
-  tableData.push([
+  const footData = [[
     { content: 'TOTAL', colSpan: 5, styles: { halign: 'center', fontStyle: 'bold' } },
     totalALVA.toFixed(2),
     totalCCUV.toFixed(2),
@@ -165,14 +177,17 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     totalEMKM.toFixed(2),
     '',
     grandTotal.toFixed(2),
-  ]);
+  ]];
 
   doc.autoTable({
     startY: 41,
     head: [['Sl.\nNo', 'Cleaning Material', 'Brand', 'Supplier', 'Rate', 'ALVA-KLMT', 'CCUV-JLSD', 'KALR-KVTR', 'EMKM-TPHT', 'Total', 'Amount (₹)']],
     body: tableData,
+    foot: footData,
+    showFoot: 'lastPage',
     theme: 'grid',
     headStyles: { fillColor: [0, 150, 136], textColor: 255, halign: 'center', valign: 'middle' },
+    footStyles: { fillColor: [0, 150, 136], textColor: 255, fontStyle: 'bold' },
     styles: { fontSize: 7.5, cellPadding: 2 },
     columnStyles: {
       0:  { halign: 'center', cellWidth: 10 },
@@ -184,13 +199,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
       8:  { halign: 'center' },
       9:  { halign: 'center' },
       10: { halign: 'right', fontStyle: 'bold' },
-    },
-    didDrawCell: (data) => {
-      if (data.row.index === tableData.length - 1) {
-        data.cell.styles.fontStyle    = 'bold';
-        data.cell.styles.fillColor    = [240, 240, 240];
-      }
-    },
+    }
   });
 
   doc.save(`KMRL_Consumption_Bill_${monthName}_${year}.pdf`);
