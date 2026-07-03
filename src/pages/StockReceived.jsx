@@ -427,7 +427,7 @@ export default function StockReceived() {
               </select>
             </div>
           </div>
-
+          <div className="form-grid">
             <div className="form-group">
               <label className="form-label form-label-required" htmlFor="ni-base-rate">Base Price (₹)</label>
               <input id="ni-base-rate" type="number" min="0" step="0.01" className="form-control"
@@ -455,7 +455,6 @@ export default function StockReceived() {
               />
             </div>
           </div>
-
           <div className="form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="ni-rate">Final Price with GST (₹)</label>
