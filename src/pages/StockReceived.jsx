@@ -412,6 +412,7 @@ export default function StockReceived() {
                 onChange={(e) => setNewItemForm(f => ({ ...f, category: e.target.value }))} required>
                 <option value="Chemical">Chemical</option>
                 <option value="Consumable">Consumable</option>
+                <option value="Disposable">Disposable</option>
               </select>
             </div>
             <div className="form-group">

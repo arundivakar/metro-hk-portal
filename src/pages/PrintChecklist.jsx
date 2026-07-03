@@ -33,7 +33,7 @@ export default function PrintChecklist() {
 
       if (invErr) throw invErr;
 
-      let items = invData.filter(i => i.category === 'Chemical' || i.category === 'Consumable');
+      let items = invData.filter(i => i.category === 'Chemical' || i.category === 'Consumable' || i.category === 'Disposable');
       const itemIds = items.map(i => i.item_id);
 
       const { data: stockData, error: stockErr } = await supabase

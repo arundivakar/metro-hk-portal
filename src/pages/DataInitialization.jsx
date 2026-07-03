@@ -64,7 +64,9 @@ export default function DataInitialization() {
         }
         else if (lowerKey.includes('chemical') || lowerKey === 'category') {
           const cat = (value || '').toLowerCase().trim();
-          normalized['Chemical/Consumable'] = cat.includes('chemical') ? 'Chemical' : 'Consumable';
+          if (cat.includes('chemical')) normalized['Chemical/Consumable'] = 'Chemical';
+          else if (cat.includes('disposable')) normalized['Chemical/Consumable'] = 'Disposable';
+          else normalized['Chemical/Consumable'] = 'Consumable';
         }
         // Exact column names from the master CSV
         else if (lowerKey === 'final_rate' || lowerKey === 'final rate') {
@@ -184,7 +186,7 @@ export default function DataInitialization() {
       // Skip rows that look like repeated headers or category sub-headings
       const nameLower = name.toLowerCase();
       if (nameLower === 'cleaning material' || nameLower === 'item name' || nameLower === 'name') return false;
-      if (nameLower === 'chemical' || nameLower === 'consumable') return false;
+      if (nameLower === 'chemical' || nameLower === 'consumable' || nameLower === 'disposable') return false;
       // Skip if Closing Stock is non-numeric text (likely a mid-table sub-header row)
       const closing = row['Closing Stock'];
       if (closing !== undefined && closing !== '' && isNaN(Number(closing))) return false;

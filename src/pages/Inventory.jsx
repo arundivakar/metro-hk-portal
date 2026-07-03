@@ -336,6 +336,7 @@ export default function Inventory() {
               <option value="All">All Categories</option>
               <option value="Chemical">Chemical</option>
               <option value="Consumable">Consumable</option>
+              <option value="Disposable">Disposable</option>
             </select>
           </div>
         </CardBody>
@@ -384,6 +385,7 @@ export default function Inventory() {
             <select className="form-control" value={editForm.category} onChange={e => handleEditChange('category', e.target.value)}>
               <option value="Consumable">Consumable</option>
               <option value="Chemical">Chemical</option>
+              <option value="Disposable">Disposable</option>
             </select>
           </div>
 

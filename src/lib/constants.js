@@ -68,7 +68,7 @@ export const PRIORITY = {
 export const APPROVAL_THRESHOLD = 500; // Rs. per item (unit_rate × quantity)
 
 // ─── Item Categories ──────────────────────────────────────────────────────────
-export const CATEGORIES = ['Chemical', 'Consumable'];
+export const CATEGORIES = ['Chemical', 'Consumable', 'Disposable'];
 
 // ─── Shifts ───────────────────────────────────────────────────────────────────
 export const SHIFTS = ['Morning', 'Afternoon', 'Night'];
