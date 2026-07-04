@@ -61,7 +61,7 @@ export default function StockMovement() {
 
   useEffect(() => {
     loadData();
-  }, [selectedStation?.id, selectedMonth, role]); // eslint-disable-line
+  }, [selectedStation?.id, selectedMonth, role, alsGroupFilter]); // eslint-disable-line
 
   const loadData = async () => {
     if (role !== ROLES.SC && role !== ROLES.ALS) return;
@@ -97,6 +97,22 @@ export default function StockMovement() {
           .eq('station_id', selectedStation.id)
           .gte('consumption_date', startDate);
         setConsumptionLogs(consumedData ?? []);
+      } else if (role === ROLES.ALS) {
+        let stockQuery = supabase.from('station_inventory').select('*, stations!inner(code)');
+        let receivedQuery = supabase.from('stock_received').select('*, stations!inner(code)').gte('received_date', startDate);
+        let consumedQuery = supabase.from('consumption_logs').select('*, stations!inner(code)').gte('consumption_date', startDate);
+        
+        const allowedStations = ALS_GROUPS[alsGroupFilter];
+        if (allowedStations) {
+           stockQuery = stockQuery.in('stations.code', allowedStations);
+           receivedQuery = receivedQuery.in('stations.code', allowedStations);
+           consumedQuery = consumedQuery.in('stations.code', allowedStations);
+        }
+
+        const [sRes, rRes, cRes] = await Promise.all([stockQuery, receivedQuery, consumedQuery]);
+        setCurrentStock(sRes.data ?? []);
+        setReceivedLogs(rRes.data ?? []);
+        setConsumptionLogs(cRes.data ?? []);
       }
     } catch (err) {
       console.error(err);
@@ -113,8 +129,9 @@ export default function StockMovement() {
     const endDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const rawData = items.map((item, index) => {
-      const stockRow = currentStock.find(s => s.item_id === item.id);
-      const currentQty = stockRow?.current_stock || 0;
+      const currentQty = currentStock
+        .filter(s => s.item_id === item.id)
+        .reduce((sum, s) => sum + Number(s.current_stock || 0), 0);
 
       const itemReceipts = receivedLogs.filter(l => l.item_id === item.id);
       const itemConsumptions = consumptionLogs.filter(l => l.item_id === item.id);

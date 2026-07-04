@@ -57,7 +57,7 @@ export default function StockReceived() {
 
   useEffect(() => {
     loadData();
-  }, [selectedStation?.id, role]); // eslint-disable-line
+  }, [selectedStation?.id, role, alsGroupFilter]); // eslint-disable-line
 
   const loadData = async () => {
     setIsLoading(true);
@@ -66,11 +66,19 @@ export default function StockReceived() {
       setItems(itemsData);
 
       if (role === ROLES.ALS) {
+        let logsQuery = supabase.from('stock_received')
+          .select('*, inventory_items(name,unit), stations!inner(code,name), users_profile(full_name)')
+          .neq('supplier', 'Opening Stock Initialization')
+          .order('received_date', { ascending: false })
+          .limit(500);
+          
+        const allowedStations = ALS_GROUPS[alsGroupFilter];
+        if (allowedStations) {
+          logsQuery = logsQuery.in('stations.code', allowedStations);
+        }
+
         const [logsRes, stationsRes] = await Promise.all([
-          supabase.from('stock_received')
-            .select('*, inventory_items(name,unit), stations(code,name), users_profile(full_name)')
-            .neq('supplier', 'Opening Stock Initialization')
-            .order('received_date', { ascending: false }).limit(200),
+          logsQuery,
           supabase.from('stations').select('id,code,name').eq('is_active', true),
         ]);
         setAllLogs(logsRes.data ?? []);
