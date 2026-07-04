@@ -382,7 +382,7 @@ export default function StockMovement() {
 
   return (
     <Layout
-      title="Stock Details & Movement"
+      title="Consumption Log"
       subtitle={role === ROLES.ALS ? 'All stations (Aggregated)' : selectedStation?.name}
       actions={
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -409,7 +409,7 @@ export default function StockMovement() {
           onClick={() => setActiveTab('history')}
           style={{ borderRadius: 'var(--radius-md) var(--radius-md) 0 0', borderBottom: activeTab === 'history' ? 'none' : '' }}
         >
-          <History size={16} /> Individual Consumption Logs
+          <History size={16} /> Consumption log history
         </button>
       </div>
 
