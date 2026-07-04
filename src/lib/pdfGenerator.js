@@ -3,6 +3,7 @@ import { applyPlugin } from 'jspdf-autotable';
 applyPlugin(jsPDF);
 import { ALS_GROUPS } from './constants';
 import { toBillingQty, getDisplayUnit } from '../utils/units';
+import { formatDate } from '../utils/dateHelpers';
 
 export function billingUnitLabel(dbUnit, nosPerKg) {
   if (nosPerKg && nosPerKg > 0) return 'Kg';
@@ -22,7 +23,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text('Revision No: 01', doc.internal.pageSize.getWidth() - 15, 15, { align: 'right' });
-  doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, doc.internal.pageSize.getWidth() - 15, 20, { align: 'right' });
+  doc.text(`Date: ${formatDate(new Date())}`, doc.internal.pageSize.getWidth() - 15, 20, { align: 'right' });
 
   // Logo
   try {

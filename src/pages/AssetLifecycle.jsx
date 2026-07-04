@@ -11,6 +11,7 @@ import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { supabase } from '../lib/supabase';
 import { ROLES, ASSET_STATUS, ASSET_STATUS_LABELS, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
+import { formatDate } from '../utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 export default function AssetLifecycle() {
@@ -263,7 +264,7 @@ export default function AssetLifecycle() {
   ];
 
   const historyColumns = [
-    { key: 'created_at', label: 'Date', render: (v) => new Date(v).toLocaleDateString('en-IN') },
+    { key: 'created_at', label: 'Date', render: (v) => formatDate(v) },
     ...((role === ROLES.ALS || role === ROLES.HKTL) ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
     { key: 'item', label: 'Cleaning Material', render: (_, r) => r.inventory_items?.name ?? '—' },
     { key: 'quantity', label: 'Quantity', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },

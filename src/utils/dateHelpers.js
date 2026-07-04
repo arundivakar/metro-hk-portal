@@ -17,3 +17,18 @@ export function isVerificationDay(date = new Date()) {
 
   return isSecondSunday || isFourthSunday;
 }
+
+/**
+ * Formats a date string or Date object to DD-MM-YYYY
+ * @param {string|Date} dateInput
+ * @returns {string}
+ */
+export function formatDate(dateInput) {
+  if (!dateInput) return '-';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return String(dateInput);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}

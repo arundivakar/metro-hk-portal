@@ -13,6 +13,7 @@ import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
 import { ROLES, PRIORITY, APPROVAL_THRESHOLD, ALS_GROUPS } from '../lib/constants';
 import { toDisplayValue, toBillingQty } from '../utils/units';
+import { formatDate } from '../utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 const today = new Date().toISOString().split('T')[0];
@@ -166,7 +167,7 @@ export default function Requests() {
     : requests.filter((r) => r.status === statusFilter);
 
   const columns = [
-    { key: 'created_at', label: 'Date', sortable: true, render: (v) => new Date(v).toLocaleDateString('en-IN') },
+    { key: 'created_at', label: 'Date', sortable: true, render: (v) => formatDate(v) },
     ...(role !== ROLES.HKS ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
     { key: 'item', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },
     { key: 'photo', label: 'Photo', render: (_, r) => r.image_url ? (

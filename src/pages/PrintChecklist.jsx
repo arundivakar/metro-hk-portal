@@ -7,6 +7,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import toast from 'react-hot-toast';
 import { CheckCircle2, Circle, Search } from 'lucide-react';
+import { formatDate } from '../utils/dateHelpers';
 
 export default function PrintChecklist() {
   const { selectedStation } = useStationStore();
@@ -160,7 +161,7 @@ export default function PrintChecklist() {
 
     try {
       const doc = new jsPDF('landscape');
-      const today = new Date().toLocaleDateString('en-GB');
+      const today = formatDate(new Date());
 
       // Title
       doc.setFontSize(18);

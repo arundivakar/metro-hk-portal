@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 import toast from 'react-hot-toast';
+import { formatDate } from '../utils/dateHelpers';
 
 
 export default function Inventory() {
@@ -213,7 +214,7 @@ export default function Inventory() {
       min_stock_display: dispUnit === 'Nos'
         ? `${Math.round(minDisplay)} Nos`
         : `${minDisplay.toFixed(2)} ${dispUnit}`,
-      last_updated: row.last_updated ? new Date(row.last_updated).toLocaleDateString('en-IN') : '—',
+      last_updated: row.last_updated ? formatDate(row.last_updated) : '—',
       is_low: (role === ROLES.ALS || role === ROLES.HKTL) ? false : row.is_low_stock,
       _rowClass: ((role !== ROLES.ALS && role !== ROLES.HKTL) && row.is_low_stock) ? 'low-stock-row' : '',
       _zeroStock: rawStock === 0,

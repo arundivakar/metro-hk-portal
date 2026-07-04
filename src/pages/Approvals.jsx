@@ -12,6 +12,7 @@ import { useStationStore } from '../store/stationStore';
 import { supabase } from '../lib/supabase';
 import { ROLES, REQUEST_STATUS, APPROVAL_THRESHOLD, ALS_GROUPS } from '../lib/constants';
 import { toDisplayValue, toBillingQty } from '../utils/units';
+import { formatDate } from '../utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 export default function Approvals() {
@@ -210,7 +211,7 @@ export default function Approvals() {
   };
 
   const columns = [
-    { key: 'created_at', label: 'Date', sortable: true, render: (v) => new Date(v).toLocaleDateString('en-IN') },
+    { key: 'created_at', label: 'Date', sortable: true, render: (v) => formatDate(v) },
     { key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' },
     { key: 'requested_by', label: 'Requested By', render: (_, r) => r.users_profile?.full_name ?? r.users_profile?.employee_id ?? '—' },
     { key: 'item', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },

@@ -13,6 +13,7 @@ import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS } from '../lib/constants';
 import { generateMonthlyBillPdf } from '../lib/pdfGenerator';
+import { formatDate } from '../utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 export default function StockMovement() {
@@ -347,7 +348,7 @@ export default function StockMovement() {
   ];
 
   const historyColumns = [
-    { key: 'consumption_date', label: 'Date', sortable: true },
+    { key: 'consumption_date', label: 'Date', sortable: true, render: (v) => formatDate(v) },
     { key: 'item', label: 'Item', render: (_, r) => items.find(i => i.id === r.item_id)?.name || 'Unknown Item' },
     { key: 'quantity', label: 'Qty Consumed', render: (_, r) => {
         const item = items.find(i => i.id === r.item_id);

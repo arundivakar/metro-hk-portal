@@ -13,6 +13,7 @@ import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import { toDisplayValue, toBillingQty } from '../utils/units';
+import { formatDate } from '../utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 const today = new Date().toISOString().split('T')[0];
@@ -208,7 +209,7 @@ export default function StockReceived() {
 
   const columns = [
     ...(role === ROLES.ALS ? [{ key: 'station', label: 'Station', render: (_, row) => row.stations?.code ?? '—' }] : []),
-    { key: 'received_date', label: 'Date', sortable: true },
+    { key: 'received_date', label: 'Date', sortable: true, render: (v) => formatDate(v) },
     { key: 'item', label: 'Item', render: (_, row) => row.inventory_items?.name ?? '—' },
     { key: 'quantity', label: 'Qty Received', render: (_, row) => `${row.quantity} ${row.inventory_items?.unit ?? ''}` },
     { key: 'unit_rate', label: 'Unit Rate', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
