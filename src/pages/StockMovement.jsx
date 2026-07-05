@@ -353,12 +353,12 @@ export default function StockMovement() {
     { key: 'closing_stock',        label: 'Closing',           render: (v, row) => <strong style={{ color: Number(row.closing_stock_raw) === 0 ? 'var(--color-danger-600)' : 'inherit' }}>{v} {row.unit}</strong> },
     ...(role === ROLES.SC ? [{
       key: 'actions', label: 'Actions', render: (_, row) => (
-        <Button variant="outline" onClick={() => {
+        <Button variant="primary" size="sm" leftIcon={<Pencil size={14} />} onClick={() => {
           setSelectedItemForAction(row);
           setFormQty(''); setFormRemarks(''); setFormDate(today.toISOString().split('T')[0]);
           setShowConsumptionForm(true);
         }}>
-          Log Consumed
+          Log Daily Consumption
         </Button>
       )
     }] : [])
