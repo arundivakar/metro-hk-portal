@@ -173,7 +173,7 @@ export default function StockMovement() {
         id: item.id,
         item_name: item.name,
         brand: item.rate_master?.brand || 'ORDINARY',
-        supplier: 'Tricuesta',
+        supplier: item.rate_master?.supplier || 'Tricuesta',
         tender_year: item.rate_master?.tender_year || '2024-25',
         unit,
         opening_stock: fmtDisp(visualOpeningStock > 0 ? visualOpeningStock : 0),

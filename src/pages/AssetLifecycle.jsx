@@ -238,7 +238,7 @@ export default function AssetLifecycle() {
     ...((role === ROLES.ALS || role === ROLES.HKTL) ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
     { key: 'item', label: 'Consumable Material', render: (_, r) => <strong>{r.inventory_items?.name ?? '—'}</strong> },
     { key: 'brand', label: 'Brand', render: (_, r) => r.inventory_items?.rate_master?.brand || '—' },
-    { key: 'supplier', label: 'Supplier', render: () => 'Tricuesta' },
+    { key: 'supplier', label: 'Supplier', render: (_, r) => r.inventory_items?.rate_master?.supplier || 'Tricuesta' },
     { key: 'tender_year', label: 'Tender Year', render: (_, r) => r.inventory_items?.rate_master?.tender_year || '—' },
     { key: 'in_good_condition', label: 'In Good Condition (In Use)', render: (_, r) => `${Number(r.quantity_in_use || 0)} ${r.inventory_items?.unit ?? ''}` },
     { key: 'partially_damaged', label: 'Partially Damaged (Usable)', render: (_, r) => `${Number(r.quantity_damaged || 0)} ${r.inventory_items?.unit ?? ''}` },
