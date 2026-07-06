@@ -239,7 +239,11 @@ export default function StockReceived() {
       return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
     }},
     { key: 'unit_rate', label: 'Unit Rate', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
-    { key: 'total_value', label: 'Total Value', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
+    { key: 'total_value', label: 'Total Value', render: (_, row) => {
+      if (!row.unit_rate) return '—';
+      const dispQty = toDisplayValue(row.quantity, row.inventory_items?.unit || 'Nos');
+      return `₹${(dispQty * row.unit_rate).toFixed(2)}`;
+    }},
     { key: 'source_station', label: 'Received From', render: (_, row) => {
         if (row.source_station_id) {
           const srcStation = stations.find(s => s.id === row.source_station_id);
