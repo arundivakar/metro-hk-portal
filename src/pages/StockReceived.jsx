@@ -12,7 +12,7 @@ import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
-import { toDisplayValue, toBillingQty } from '../utils/units';
+import { toDisplayValue, getDisplayUnit, toBaseValue } from '../utils/units';
 import { formatDate } from '../utils/dateHelpers';
 import toast from 'react-hot-toast';
 
@@ -30,6 +30,11 @@ export default function StockReceived() {
   const [showNewItemForm, setShowNewItemForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Month selection (same as Consumption Log)
+  const todayDate = new Date();
+  const currentMonthStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
 
   // Editing state
   const [editingLog, setEditingLog] = useState(null);
@@ -57,7 +62,7 @@ export default function StockReceived() {
 
   useEffect(() => {
     loadData();
-  }, [selectedStation?.id, role, alsGroupFilter]); // eslint-disable-line
+  }, [selectedStation?.id, role, alsGroupFilter, selectedMonth]); // eslint-disable-line
 
   const loadData = async () => {
     setIsLoading(true);
@@ -66,9 +71,15 @@ export default function StockReceived() {
       setItems(itemsData);
 
       if (role === ROLES.ALS) {
+        const [year, month] = selectedMonth.split('-');
+        const startDate = `${year}-${month}-01`;
+        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
         let logsQuery = supabase.from('stock_received')
           .select('*, inventory_items(name,unit), stations!inner(code,name), users_profile(full_name)')
           .neq('supplier', 'Opening Stock Initialization')
+          .gte('received_date', startDate)
+          .lte('received_date', endDate)
           .order('received_date', { ascending: false })
           .limit(500);
           
@@ -89,17 +100,19 @@ export default function StockReceived() {
         });
         setStations(sortedStations);
       } else if (selectedStation?.id) {
-        const [data, stationsRes] = await Promise.all([
-          fetchStockReceived(selectedStation.id),
-          supabase.from('stations').select('id,code,name').eq('is_active', true),
-        ]);
+        const [year, month] = selectedMonth.split('-');
+        const startDate = `${year}-${month}-01`;
+        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+        const data = await fetchStockReceived(selectedStation.id, { from: startDate, to: endDate });
         setLogs(data);
+        const stationsRes = await supabase.from('stations').select('id,code,name').eq('is_active', true);
         const sortedStations = (stationsRes.data ?? []).sort((a, b) => {
           const indexA = STATION_ORDER.indexOf(a.code);
           const indexB = STATION_ORDER.indexOf(b.code);
           return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
         });
         setStations(sortedStations);
+
       }
     } catch (err) {
       console.error(err);
@@ -120,10 +133,11 @@ export default function StockReceived() {
       await addStockReceived({
         station_id: selectedStation.id,
         item_id: form.item_id,
-        quantity: parseFloat(form.quantity),
+        // Convert display unit (Ltr/Kg/Nos) to base unit (ml/g/Nos) for DB storage
+        quantity: toBaseValue(parseFloat(form.quantity), selectedItem?.unit || 'Nos'),
         received_date: form.received_date,
         invoice_number: form.invoice_number || null,
-        source_station_id: form.source_station_id || null, // Capture source station
+        source_station_id: form.source_station_id || null,
         supplier: form.source_station_id ? null : (form.supplier || 'KDS'),
         unit_rate: form.unit_rate ? parseFloat(form.unit_rate) : null,
         remarks: form.remarks || null,
@@ -219,7 +233,11 @@ export default function StockReceived() {
     ...(role === ROLES.ALS ? [{ key: 'station', label: 'Station', render: (_, row) => row.stations?.code ?? '—' }] : []),
     { key: 'received_date', label: 'Date', sortable: true, render: (v) => formatDate(v) },
     { key: 'item', label: 'Item', render: (_, row) => row.inventory_items?.name ?? '—' },
-    { key: 'quantity', label: 'Qty Received', render: (_, row) => `${row.quantity} ${row.inventory_items?.unit ?? ''}` },
+    { key: 'quantity', label: 'Qty Received', render: (_, row) => {
+      const dispUnit = getDisplayUnit(row.inventory_items?.unit || 'Nos');
+      const dispVal = toDisplayValue(row.quantity, row.inventory_items?.unit || 'Nos');
+      return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+    }},
     { key: 'unit_rate', label: 'Unit Rate', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
     { key: 'total_value', label: 'Total Value', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
     { key: 'source_station', label: 'Received From', render: (_, row) => {
@@ -259,7 +277,14 @@ export default function StockReceived() {
       title="Stock Received"
       subtitle={role === ROLES.ALS ? 'All stations' : selectedStation?.name}
       actions={
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <label style={{ fontSize: '13px', fontWeight: 600 }}>Select Month:</label>
+          <input
+            type="month"
+            className="form-control"
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(e.target.value)}
+          />
           {selectedStation?.code === 'PNCU' && (
             <Button variant="outline" leftIcon={<Plus size={16} />} onClick={() => setShowNewItemForm(true)}>
               Add New Catalogue Item
@@ -331,7 +356,7 @@ export default function StockReceived() {
           </div>
           <div className="form-grid">
             <div className="form-group">
-              <label className="form-label form-label-required" htmlFor="sr-qty">Quantity</label>
+              <label className="form-label form-label-required" htmlFor="sr-qty">Quantity ({selectedItem ? getDisplayUnit(selectedItem.unit) : 'Units'})</label>
               <input id="sr-qty" type="number" min="0.001" step="any" className="form-control"
                 value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} required />
             </div>
@@ -374,7 +399,7 @@ export default function StockReceived() {
           </div>
           {selectedItem && form.quantity && form.unit_rate && (
             <Alert variant="info" style={{ marginBottom: 'var(--space-3)' }}>
-              Total Value: ₹{(toBillingQty(form.quantity, selectedItem.unit, selectedItem?.rate_master?.nos_per_kg) * parseFloat(form.unit_rate)).toFixed(2)}
+              Total Value: ₹{(parseFloat(form.quantity) * parseFloat(form.unit_rate)).toFixed(2)}
             </Alert>
           )}
           <div className="form-group">
