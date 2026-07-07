@@ -153,38 +153,36 @@ export default function StockReceived() {
 
     setSubmitting(true);
     try {
-      // Step 1: Insert stock_received for the DESTINATION station
-      const receivedRecord = await addStockReceived({
-        station_id: selectedStation.id,
-        item_id: form.item_id,
-        // Convert display unit (Ltr/Kg/Nos) to base unit (ml/g/Nos) for DB storage
-        quantity: baseQty,
-        received_date: form.received_date,
-        invoice_number: form.invoice_number || null,
-        source_station_id: isTransfer ? form.source_station_id : null,
-        supplier: isTransfer ? null : (form.supplier || 'KDS'),
-        unit_rate: form.unit_rate ? parseFloat(form.unit_rate) : null,
-        remarks: form.remarks || null,
-        received_by: profile.id,
-      });
-
-      // Step 2 (Inter-station only): Deduct from SOURCE station via consumption_logs.
-      // The DB trigger on consumption_logs will automatically reduce source station_inventory.
       if (isTransfer) {
-        const srcStation = stations.find(s => s.id === form.source_station_id);
-        const { error: transferErr } = await supabase.from('consumption_logs').insert({
-          station_id: form.source_station_id,
-          item_id: form.item_id,
-          quantity_used: baseQty,
-          consumption_date: form.received_date,
-          remarks: `Inter-Station Transfer Out to ${selectedStation.code}`,
-          logged_by: profile.id,
+        // Inter-station transfer: use the atomic SECURITY DEFINER RPC.
+        // This single call handles BOTH the destination receipt AND the source deduction
+        // inside one Postgres transaction, bypassing RLS for cross-station writes.
+        const { error: rpcErr } = await supabase.rpc('fn_inter_station_transfer', {
+          p_source_station_id: form.source_station_id,
+          p_dest_station_id:   selectedStation.id,
+          p_item_id:           form.item_id,
+          p_quantity:          baseQty,
+          p_transfer_date:     form.received_date,
+          p_dest_station_code: selectedStation.code,
+          p_logged_by:         profile.id,
+          p_remarks:           form.remarks || null,
+          p_unit_rate:         form.unit_rate ? parseFloat(form.unit_rate) : null,
         });
-        if (transferErr) {
-          // Rollback: delete the destination receipt to maintain consistency
-          await supabase.rpc('fn_delete_stock_received', { p_log_id: receivedRecord.id });
-          throw new Error('Transfer failed: Could not deduct stock from source station. Rolled back.');
-        }
+        if (rpcErr) throw new Error(rpcErr.message);
+      } else {
+        // Normal KDS / external supplier receipt — unchanged
+        await addStockReceived({
+          station_id:        selectedStation.id,
+          item_id:           form.item_id,
+          quantity:          baseQty,
+          received_date:     form.received_date,
+          invoice_number:    form.invoice_number || null,
+          source_station_id: null,
+          supplier:          form.supplier || 'KDS',
+          unit_rate:         form.unit_rate ? parseFloat(form.unit_rate) : null,
+          remarks:           form.remarks || null,
+          received_by:       profile.id,
+        });
       }
 
       toast.success(isTransfer ? 'Inter-station transfer completed!' : 'Stock received entry added successfully!');
@@ -194,7 +192,7 @@ export default function StockReceived() {
       setStationStockMap({});
       loadData();
     } catch (err) {
-      setError(err.message.includes('Insufficient') || err.message.includes('Transfer failed') ? err.message : 'Failed to save entry: ' + err.message);
+      setError(err.message.includes('Insufficient') ? err.message : 'Failed to save entry: ' + err.message);
     } finally {
       setSubmitting(false);
     }
