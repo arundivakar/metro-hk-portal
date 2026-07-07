@@ -358,7 +358,7 @@ function ALSDashboard() {
     if (selectedStationDetail) {
       loadStationDetails();
     }
-  }, [selectedStationDetail, modalMonth]); // eslint-disable-line
+  }, [selectedStationDetail, modalMonth, modalTab]); // eslint-disable-line
 
   const loadStationDetails = async () => {
     if (!selectedStationDetail) return;
@@ -368,7 +368,8 @@ function ALSDashboard() {
       const year = parseInt(yearStr, 10);
       const month = parseInt(monthStr, 10);
       const startDate = `${yearStr}-${monthStr}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${yearStr}-${monthStr}-${String(lastDay).padStart(2, '0')}`; // Last day of month
 
       if (modalTab === 'stock') {
         const { data } = await supabase
