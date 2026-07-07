@@ -56,6 +56,9 @@ export default function StockReceived() {
     remarks: '',
   });
 
+  // Maps station_id → current_stock (base units) for the selected item
+  const [stationStockMap, setStationStockMap] = useState({});
+
   const [newItemForm, setNewItemForm] = useState({
     item_name: '', category: 'Consumable', unit: 'Nos', base_rate: '', gst_percent: '18', unit_rate: '', tender_year: '', brand: '', remarks: ''
   });
@@ -130,27 +133,68 @@ export default function StockReceived() {
       setError('Item, quantity and date are required.');
       return;
     }
+
+    const isTransfer = !!form.source_station_id;
+    const baseQty = toBaseValue(parseFloat(form.quantity), selectedItem?.unit || 'Nos');
+
+    // Validate stock availability for inter-station transfer
+    if (isTransfer) {
+      const srcAvail = stationStockMap[form.source_station_id] || 0;
+      if (baseQty > srcAvail) {
+        const dispUnit = getDisplayUnit(selectedItem?.unit || 'Nos');
+        const availDisp = toDisplayValue(srcAvail, selectedItem?.unit || 'Nos');
+        const availFmt = dispUnit === 'Nos'
+          ? `${Math.round(availDisp)} Nos`
+          : `${availDisp.toFixed(2)} ${dispUnit}`;
+        setError(`Insufficient stock at source station. Available: ${availFmt}`);
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
-      await addStockReceived({
+      // Step 1: Insert stock_received for the DESTINATION station
+      const receivedRecord = await addStockReceived({
         station_id: selectedStation.id,
         item_id: form.item_id,
         // Convert display unit (Ltr/Kg/Nos) to base unit (ml/g/Nos) for DB storage
-        quantity: toBaseValue(parseFloat(form.quantity), selectedItem?.unit || 'Nos'),
+        quantity: baseQty,
         received_date: form.received_date,
         invoice_number: form.invoice_number || null,
-        source_station_id: form.source_station_id || null,
-        supplier: form.source_station_id ? null : (form.supplier || 'KDS'),
+        source_station_id: isTransfer ? form.source_station_id : null,
+        supplier: isTransfer ? null : (form.supplier || 'KDS'),
         unit_rate: form.unit_rate ? parseFloat(form.unit_rate) : null,
         remarks: form.remarks || null,
         received_by: profile.id,
       });
-      toast.success('Stock received entry added successfully!');
+
+      // Step 2 (Inter-station only): Deduct from SOURCE station via consumption_logs.
+      // The DB trigger on consumption_logs will automatically reduce source station_inventory.
+      if (isTransfer) {
+        const srcStation = stations.find(s => s.id === form.source_station_id);
+        const { error: transferErr } = await supabase.from('consumption_logs').insert({
+          station_id: form.source_station_id,
+          item_id: form.item_id,
+          quantity_used: baseQty,
+          consumption_date: form.received_date,
+          remarks: `Inter-Station Transfer Out to ${selectedStation.code}`,
+          logged_by: profile.id,
+        });
+        if (transferErr) {
+          // Rollback: delete the destination receipt to maintain consistency
+          await supabase.rpc('fn_delete_stock_received', { p_log_id: receivedRecord.id });
+          throw new Error('Transfer failed: Could not deduct stock from source station. Rolled back.');
+        }
+      }
+
+      toast.success(isTransfer ? 'Inter-station transfer completed!' : 'Stock received entry added successfully!');
       setShowForm(false);
-      setForm({ item_id: '', quantity: '', received_date: today, invoice_number: '', source_station_id: '', supplier: '', unit_rate: '', remarks: '' });
+      const resetForm = { item_id: '', quantity: '', received_date: today, invoice_number: '', source_station_id: '', supplier: '', unit_rate: '', remarks: '' };
+      setForm(resetForm);
+      setStationStockMap({});
       loadData();
     } catch (err) {
-      setError(err.message.includes('Insufficient') ? err.message : 'Failed to save entry: ' + err.message);
+      setError(err.message.includes('Insufficient') || err.message.includes('Transfer failed') ? err.message : 'Failed to save entry: ' + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -223,6 +267,30 @@ export default function StockReceived() {
   };
 
   const selectedItem = items.find((i) => i.id === form.item_id);
+
+  // Fetch per-station stock when item changes, to power source dropdown filtering
+  const handleItemChange = async (val) => {
+    const item = items.find((i) => i.id === val);
+    setForm((f) => ({ ...f, item_id: val, unit_rate: item?.rate_master?.unit_rate ?? '', source_station_id: '', quantity: '' }));
+    if (val) {
+      const { data } = await supabase
+        .from('v_station_inventory_summary')
+        .select('station_id, current_stock')
+        .eq('item_id', val);
+      const map = {};
+      (data || []).forEach(r => { map[r.station_id] = Number(r.current_stock || 0); });
+      setStationStockMap(map);
+    } else {
+      setStationStockMap({});
+    }
+  };
+
+  // Stations that have stock > 0 for the selected item (used to filter source dropdown)
+  const availableSourceStations = stations.filter(s => {
+    if (s.id === selectedStation?.id) return false; // exclude self
+    if (!form.item_id) return true;                  // no item selected yet — show all
+    return (stationStockMap[s.id] || 0) > 0;         // only stations with stock
+  });
 
   const allowedStations = ALS_GROUPS[alsGroupFilter];
 
@@ -352,10 +420,7 @@ export default function StockReceived() {
                 sublabel: i.rate_master?.tender_year ? `Tender: ${i.rate_master.tender_year}` : null
               }))}
               value={form.item_id}
-              onChange={(val) => {
-                const item = items.find((i) => i.id === val);
-                setForm((f) => ({ ...f, item_id: val, unit_rate: item?.rate_master?.unit_rate ?? '' }));
-              }}
+              onChange={handleItemChange}
               placeholder="Search items..."
               required
             />
@@ -385,12 +450,20 @@ export default function StockReceived() {
           <div className="form-grid">
             <div className="form-group">
               <label className="form-label form-label-required" htmlFor="sr-source">Received From (Source)</label>
-              <select id="sr-source" className="form-control" value={form.source_station_id} 
-                onChange={(e) => setForm(f => ({ ...f, source_station_id: e.target.value, supplier: e.target.value === '' ? 'KDS' : '' }))}>
+              <select id="sr-source" className="form-control" value={form.source_station_id}
+                onChange={(e) => setForm(f => ({ ...f, source_station_id: e.target.value, supplier: e.target.value === '' ? 'KDS' : '', quantity: '' }))}>
                 <option value="">Main Store (KDS / Supplier)</option>
                 <optgroup label="Inter-Station Transfer">
-                  {stations.filter(s => s.id !== selectedStation.id).map(s => (
-                    <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
+                  {availableSourceStations.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.code} — {s.name}
+                      {form.item_id && stationStockMap[s.id] !== undefined ? ` (${(() => {
+                        const unit = selectedItem?.unit || 'Nos';
+                        const dispUnit = getDisplayUnit(unit);
+                        const dispVal = toDisplayValue(stationStockMap[s.id] || 0, unit);
+                        return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+                      })()})` : ''}
+                    </option>
                   ))}
                 </optgroup>
               </select>
@@ -403,6 +476,21 @@ export default function StockReceived() {
               </div>
             )}
           </div>
+          {/* Available stock info for inter-station transfer */}
+          {form.source_station_id && selectedItem && (() => {
+            const unit = selectedItem.unit || 'Nos';
+            const dispUnit = getDisplayUnit(unit);
+            const raw = stationStockMap[form.source_station_id] || 0;
+            const dispVal = toDisplayValue(raw, unit);
+            const formatted = dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+            return (
+              <Alert variant={raw > 0 ? 'info' : 'danger'} style={{ marginBottom: 'var(--space-3)' }}>
+                {raw > 0
+                  ? `✓ Available at source: ${formatted}`
+                  : `⚠ No stock available at selected source station for this item.`}
+              </Alert>
+            );
+          })()}
           {selectedItem && form.quantity && form.unit_rate && (
             <Alert variant="info" style={{ marginBottom: 'var(--space-3)' }}>
               Total Value: ₹{(parseFloat(form.quantity) * parseFloat(form.unit_rate)).toFixed(2)}

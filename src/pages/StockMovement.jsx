@@ -158,6 +158,13 @@ export default function StockMovement() {
         .filter(l => l.consumption_date <= endDateStr)
         .reduce((sum, l) => sum + Number(l.quantity_used), 0);
 
+      // Split consumed into: actual consumption vs inter-station transfer-out
+      // Closing / opening stock calculations remain identical (both are in consumption_logs)
+      const transferOutDuringMonth = itemConsumptions
+        .filter(l => l.consumption_date <= endDateStr && l.remarks?.startsWith('Inter-Station Transfer Out'))
+        .reduce((sum, l) => sum + Number(l.quantity_used), 0);
+      const realConsumedDuringMonth = consumptionsDuringMonth - transferOutDuringMonth;
+
       const trueOpeningStock = closingStock - (receiptsDuringMonth + initDuringMonth) + consumptionsDuringMonth;
       const visualOpeningStock = trueOpeningStock + initDuringMonth;
 
@@ -178,13 +185,16 @@ export default function StockMovement() {
         unit,
         opening_stock: fmtDisp(visualOpeningStock > 0 ? visualOpeningStock : 0),
         received_transferred: fmtDisp(receiptsDuringMonth),
-        consumption: fmtDisp(consumptionsDuringMonth),
+        transferred_out: fmtDisp(transferOutDuringMonth),
+        transferred_out_raw: toDisp(transferOutDuringMonth),
+        consumption: fmtDisp(realConsumedDuringMonth),
         closing_stock: fmtDisp(closingStock > 0 ? closingStock : 0),
         closing_stock_raw: toDisp(closingStock > 0 ? closingStock : 0),
         _zeroStock: closingStock <= 0,
         _visualOpeningStock: visualOpeningStock,
         _receiptsDuringMonth: receiptsDuringMonth,
-        _consumptionsDuringMonth: consumptionsDuringMonth
+        _consumptionsDuringMonth: consumptionsDuringMonth,
+        _transferOutDuringMonth: transferOutDuringMonth,
       };
     });
 
@@ -192,7 +202,8 @@ export default function StockMovement() {
       row.closing_stock_raw > 0 || 
       row._consumptionsDuringMonth > 0 || 
       row._receiptsDuringMonth > 0 || 
-      row._visualOpeningStock > 0
+      row._visualOpeningStock > 0 ||
+      row._transferOutDuringMonth > 0
     );
 
     // Sort the data: stock > 0 first, then by consumption (descending), then by name
@@ -348,7 +359,17 @@ export default function StockMovement() {
     { key: 'supplier', label: 'Supplier' },
     { key: 'tender_year', label: 'Tender Year', width: 100, render: (v) => <span style={{ whiteSpace: 'nowrap' }}>{v}</span> },
     { key: 'opening_stock',        label: 'Opening',            render: (v, row) => `${v} ${row.unit}` },
-    { key: 'received_transferred', label: 'Received', width: 100, render: (v, row) => `${v} ${row.unit}` },
+    { key: 'received_transferred', label: 'Received',  width: 100, render: (v, row) => `${v} ${row.unit}` },
+    { key: 'transferred_out',      label: 'Transferred Out', width: 120,
+      render: (v, row) => {
+        const isZero = Number(row.transferred_out_raw) === 0;
+        return (
+          <span style={{ color: isZero ? 'var(--color-gray-400)' : 'var(--color-warning-600)', fontWeight: isZero ? 400 : 600 }}>
+            {v} {row.unit}
+          </span>
+        );
+      }
+    },
     { key: 'consumption',          label: 'Consumed',  render: (v, row) => `${v} ${row.unit}` },
     { key: 'closing_stock',        label: 'Closing',           render: (v, row) => <strong style={{ color: Number(row.closing_stock_raw) === 0 ? 'var(--color-danger-600)' : 'inherit' }}>{v} {row.unit}</strong> },
     ...(role === ROLES.SC ? [{
@@ -367,7 +388,7 @@ export default function StockMovement() {
   const historyColumns = [
     { key: 'consumption_date', label: 'Date', sortable: true, render: (v) => formatDate(v) },
     { key: 'item', label: 'Item', render: (_, r) => items.find(i => i.id === r.item_id)?.name || 'Unknown Item' },
-    { key: 'quantity', label: 'Qty Consumed', render: (_, r) => {
+    { key: 'quantity', label: 'Qty', render: (_, r) => {
         const item = items.find(i => i.id === r.item_id);
         const dbUnit = item?.unit || 'Nos';
         const dispUnit = getDisplayUnit(dbUnit);
@@ -376,11 +397,23 @@ export default function StockMovement() {
         return `${formatted} ${dispUnit}`;
       }
     },
+    { key: 'type', label: 'Type', render: (_, r) => {
+        const isTransferOut = r.remarks?.startsWith('Inter-Station Transfer Out');
+        return isTransferOut
+          ? <span style={{ background: 'var(--color-warning-100)', color: 'var(--color-warning-700)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>🔄 Transfer Out</span>
+          : <span style={{ background: 'var(--color-primary-50)', color: 'var(--color-primary-700)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>Consumed</span>;
+      }
+    },
     { key: 'remarks', label: 'Remarks', render: (v) => v || '—' },
     { 
       key: 'actions', 
       label: 'Actions', 
       render: (_, row) => {
+        // Transfer-out logs are system-generated paired records — do not allow editing/deleting
+        const isTransferOut = row.remarks?.startsWith('Inter-Station Transfer Out');
+        if (isTransferOut) {
+          return <span style={{ fontSize: '0.78rem', color: 'var(--color-gray-400)', fontStyle: 'italic' }}>System record</span>;
+        }
         const canEdit = role === ROLES.ALS || (role === ROLES.SC && row.station_id === selectedStation?.id);
         if (!canEdit) return null;
         return (
