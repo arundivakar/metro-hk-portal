@@ -6,7 +6,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import toast from 'react-hot-toast';
-import { CheckCircle2, Circle, Search } from 'lucide-react';
+import { CheckCircle2, Circle, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatDate } from '../utils/dateHelpers';
 
 export default function PrintChecklist() {
@@ -298,138 +298,193 @@ export default function PrintChecklist() {
     }
   };
 
-  if (isLoading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading verification data...</div>;
+  if (isLoading) return <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'system-ui' }}>Loading verification data...</div>;
   if (error) return <div style={{ padding: '2rem', color: 'red', textAlign: 'center' }}>{error}</div>;
 
-  const displayData = data.filter(item => 
+  const displayData = data.filter(item =>
     !searchQuery || item.item_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const verifiedCount = Object.values(verificationData).filter(v => v.verified).length;
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', background: '#f8f9fa', minHeight: '100vh', paddingBottom: '80px' }}>
-      
-      {/* App-like Header */}
-      <div style={{ background: 'var(--color-primary-600)', color: 'white', padding: '1rem', position: 'sticky', top: 0, zIndex: 10 }}>
-        <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Stock Verification</h2>
-        <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>{selectedStation.code} - {selectedStation.name}</div>
-      </div>
+    <div style={{ maxWidth: '640px', margin: '0 auto', background: '#f0f4f3', minHeight: '100vh', paddingBottom: '76px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
-      <div style={{ padding: '1rem' }}>
-        <p style={{ color: 'var(--color-gray-600)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-          Please physically verify the following items at the station and check them off.
-        </p>
-
-        {/* Search Bar */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div className="search-input-wrapper">
-            <Search size={15} className="search-input-icon" />
-            <input
-              type="search"
-              className="search-input"
-              placeholder="Search items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+      {/* Sticky Header */}
+      <div style={{ background: 'var(--color-primary-600)', color: 'white', padding: '0.6rem 1rem', position: 'sticky', top: 0, zIndex: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>Stock Verification</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>{selectedStation.code} — {selectedStation.name}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.7rem', opacity: 0.75 }}>Progress</div>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{verifiedCount}/{data.length}</div>
           </div>
         </div>
+      </div>
 
+      {/* Sticky Search */}
+      <div style={{ position: 'sticky', top: '46px', zIndex: 19, background: '#f0f4f3', padding: '0.5rem 0.75rem 0.35rem' }}>
+        <div style={{ position: 'relative' }}>
+          <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#888' }} />
+          <input
+            type="search"
+            placeholder="Search items..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ width: '100%', padding: '0.45rem 0.75rem 0.45rem 2rem', borderRadius: '20px', border: '1px solid #d0d7d5', fontSize: '0.85rem', background: 'white', boxSizing: 'border-box', outline: 'none' }}
+          />
+        </div>
+      </div>
+
+      <div style={{ padding: '0.35rem 0.75rem' }}>
         {/* Item Cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           {displayData.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-500)' }}>
-              No items match your search.
-            </div>
-          ) : displayData.map((item, i) => {
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>No items match your search.</div>
+          ) : displayData.map((item) => {
             const vData = verificationData[item.item_id] || { verified: false, remarks: '' };
             const isVerified = vData.verified;
+            const showRemarksKey = `remarks_open_${item.item_id}`;
 
             return (
-              <div 
-                key={item.item_id} 
-                style={{ 
-                  background: 'white', 
-                  borderRadius: '12px', 
-                  padding: '1rem', 
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-                  border: isVerified ? '2px solid var(--color-success-500)' : '2px solid transparent',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                  <div style={{ flex: 1, paddingRight: '1rem' }}>
-                    <div style={{ fontWeight: 600, fontSize: '1.05rem', color: 'var(--color-gray-900)' }}>{item.item_name}</div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)' }}>{item.brand_name || 'No Brand'} • {item.supplier || 'No Supplier'}</div>
-                  </div>
-                  <button 
-                    onClick={() => toggleVerify(item.item_id)}
-                    style={{ 
-                      background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem',
-                      color: isVerified ? 'var(--color-success-600)' : 'var(--color-gray-300)'
-                    }}
-                  >
-                    {isVerified ? <CheckCircle2 size={32} /> : <Circle size={32} />}
-                  </button>
-                </div>
-
-                <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem' }}>
-                    <div><span style={{ color: 'var(--color-gray-500)' }}>Balance Stock:</span> <strong style={{ color: 'var(--color-primary-600)' }}>{formatQty(item.current_stock, item.unit) || '0'}</strong></div>
-                    {item.in_use > 0 && <div><span style={{ color: 'var(--color-gray-500)' }}>In Use:</span> <strong>{formatQty(item.in_use, item.unit)}</strong></div>}
-                    {item.partially_damaged > 0 && <div><span style={{ color: 'var(--color-gray-500)' }}>Damaged:</span> <strong>{formatQty(item.partially_damaged, item.unit)}</strong></div>}
-                    {item.disposed > 0 && <div><span style={{ color: 'var(--color-gray-500)' }}>Disposed:</span> <strong>{formatQty(item.disposed, item.unit)}</strong></div>}
-                  </div>
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="Add remarks (optional)..."
-                  className="form-control"
-                  style={{ width: '100%', fontSize: '0.9rem' }}
-                  value={vData.remarks}
-                  onChange={(e) => handleRemarkChange(item.item_id, e.target.value)}
-                />
-              </div>
+              <VerificationCard
+                key={item.item_id}
+                item={item}
+                isVerified={isVerified}
+                vData={vData}
+                formatQty={formatQty}
+                onToggle={() => toggleVerify(item.item_id)}
+                onRemarkChange={(val) => handleRemarkChange(item.item_id, val)}
+              />
             );
           })}
         </div>
 
-        {/* Verification Form Footer */}
-        <div style={{ marginTop: '2rem', background: 'white', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>Sign & Submit</h3>
-          
-          <div style={{ display: 'grid', gap: '1rem', marginBottom: '1.5rem' }}>
+        {/* Sign & Submit panel */}
+        <div style={{ marginTop: '0.75rem', background: 'white', borderRadius: '10px', padding: '0.85rem', boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.6rem', color: '#1a1a1a' }}>Sign & Submit</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.6rem' }}>
             <div>
-              <label className="form-label form-label-required">Verified By (Name)</label>
-              <input type="text" className="form-control" value={verifierName} onChange={e => setVerifierName(e.target.value)} placeholder="Enter your full name" />
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#555', marginBottom: '3px' }}>Verified By *</label>
+              <input type="text" style={{ width: '100%', padding: '0.35rem 0.5rem', border: '1px solid #d0d7d5', borderRadius: '6px', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                value={verifierName} onChange={e => setVerifierName(e.target.value)} placeholder="Full name" />
             </div>
             <div>
-              <label className="form-label form-label-required">Employee ID</label>
-              <input type="text" className="form-control" value={empId} onChange={e => setEmpId(e.target.value)} placeholder="Enter your ID" />
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#555', marginBottom: '3px' }}>Employee ID *</label>
+              <input type="text" style={{ width: '100%', padding: '0.35rem 0.5rem', border: '1px solid #d0d7d5', borderRadius: '6px', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                value={empId} onChange={e => setEmpId(e.target.value)} placeholder="EMP-ID" />
             </div>
           </div>
-
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <label className="form-label form-label-required" style={{ margin: 0 }}>Signature</label>
-              <button onClick={clearSignature} style={{ background: 'none', border: 'none', color: 'var(--color-danger-600)', fontSize: '0.85rem', cursor: 'pointer', padding: 0 }}>Clear</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#555' }}>Signature *</label>
+              <button onClick={clearSignature} style={{ background: 'none', border: 'none', color: 'var(--color-danger-600)', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}>Clear</button>
             </div>
-            <div style={{ border: '2px dashed var(--color-gray-300)', borderRadius: '8px', background: '#fafafa', overflow: 'hidden' }}>
-              <SignatureCanvas 
-                ref={sigCanvas} 
+            <div style={{ border: '1.5px dashed #b0bcba', borderRadius: '8px', background: '#fafafa', overflow: 'hidden' }}>
+              <SignatureCanvas
+                ref={sigCanvas}
                 penColor="black"
-                canvasProps={{ width: 500, height: 150, className: 'sigCanvas', style: { width: '100%', height: '150px' } }}
+                canvasProps={{ width: 500, height: 120, style: { width: '100%', height: '120px' } }}
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Floating Action Button Bar */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', padding: '1rem', borderTop: '1px solid var(--color-gray-200)', display: 'flex', gap: '1rem', zIndex: 100 }}>
-        <button className="btn btn-outline" onClick={() => window.close()} style={{ flex: 1 }}>Cancel</button>
-        <button className="btn btn-primary" onClick={handleDownloadPdf} style={{ flex: 2 }}>Submit & Download PDF</button>
+      {/* Sticky Bottom Bar */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', padding: '0.6rem 0.75rem', borderTop: '1px solid #e0e7e5', display: 'flex', gap: '0.5rem', zIndex: 100, boxShadow: '0 -2px 12px rgba(0,0,0,0.1)' }}>
+        <button className="btn btn-outline" onClick={() => window.close()} style={{ flex: 1, padding: '0.55rem', fontSize: '0.85rem' }}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleDownloadPdf} style={{ flex: 2, padding: '0.55rem', fontSize: '0.85rem', fontWeight: 600 }}>Submit & Download PDF</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Compact verification card sub-component ─────────────────────────────────
+function VerificationCard({ item, isVerified, vData, formatQty, onToggle, onRemarkChange }) {
+  const [remarkOpen, setRemarkOpen] = useState(false);
+  const balance = Number(item.current_stock) || 0;
+
+  const badgeStyle = (color) => ({
+    display: 'inline-flex', alignItems: 'center', gap: '2px',
+    background: color, borderRadius: '4px',
+    padding: '1px 6px', fontSize: '0.7rem', fontWeight: 600, color: 'white',
+    whiteSpace: 'nowrap'
+  });
+
+  return (
+    <div
+      style={{
+        background: 'white',
+        borderRadius: '8px',
+        padding: '0.55rem 0.65rem',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        border: isVerified ? '1.5px solid #00b894' : '1.5px solid transparent',
+        transition: 'border-color 0.15s',
+      }}
+    >
+      {/* Top row: name + verify toggle */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#1a1a1a', lineHeight: 1.25, marginBottom: '1px' }}>
+            {item.item_name}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: '#888', lineHeight: 1.2 }}>
+            {[item.brand_name, item.supplier].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+        <button
+          onClick={onToggle}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0, color: isVerified ? '#00b894' : '#ccc' }}
+          aria-label={isVerified ? 'Verified' : 'Mark verified'}
+        >
+          {isVerified ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+        </button>
       </div>
 
+      {/* Badge row */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '0.35rem' }}>
+        <span style={badgeStyle('#0082b0')}>Stock: {formatQty(balance, item.unit) || '0'}</span>
+        {item.in_use > 0 && <span style={badgeStyle('#6c757d')}>In Use: {formatQty(item.in_use, item.unit)}</span>}
+        {item.partially_damaged > 0 && <span style={badgeStyle('#e67e22')}>Damaged: {formatQty(item.partially_damaged, item.unit)}</span>}
+        {item.disposed > 0 && <span style={badgeStyle('#c0392b')}>Disposed: {formatQty(item.disposed, item.unit)}</span>}
+        <span style={{ ...badgeStyle(isVerified ? '#00b894' : '#aaa'), marginLeft: 'auto' }}>
+          {isVerified ? '✓ Verified' : 'Pending'}
+        </span>
+      </div>
+
+      {/* Collapsible remarks */}
+      <div style={{ marginTop: '0.35rem' }}>
+        {!remarkOpen && !vData.remarks ? (
+          <button
+            onClick={() => setRemarkOpen(true)}
+            style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.72rem', color: '#009688', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+          >
+            <ChevronDown size={12} /> Add Remarks
+          </button>
+        ) : (
+          <div>
+            <button
+              onClick={() => setRemarkOpen(r => !r)}
+              style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.72rem', color: '#009688', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '3px' }}
+            >
+              {remarkOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {vData.remarks ? 'Edit Remarks' : 'Add Remarks'}
+            </button>
+            {(remarkOpen || vData.remarks) && (
+              <input
+                type="text"
+                placeholder="Add remarks..."
+                value={vData.remarks}
+                onChange={(e) => onRemarkChange(e.target.value)}
+                style={{ width: '100%', padding: '0.3rem 0.5rem', border: '1px solid #d0d7d5', borderRadius: '5px', fontSize: '0.8rem', boxSizing: 'border-box', background: '#fafafa' }}
+              />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

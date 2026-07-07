@@ -10,70 +10,150 @@ export function billingUnitLabel(dbUnit, nosPerKg) {
   return getDisplayUnit(dbUnit);
 }
 
-export const generateMonthlyBillPdf = async (month, year, consumptionData, allItems = []) => {
-  const doc = new jsPDF('landscape');
-  
-  // Title
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('KOCHI METRO RAIL LIMITED', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
-  
-  doc.setFontSize(12);
-  doc.text('KMRL-O&M-OPC-FOR-150', doc.internal.pageSize.getWidth() - 15, 10, { align: 'right' });
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Revision No: 01', doc.internal.pageSize.getWidth() - 15, 15, { align: 'right' });
-  doc.text(`Date: ${formatDate(new Date())}`, doc.internal.pageSize.getWidth() - 15, 20, { align: 'right' });
+// ─── Currency formatter ──────────────────────────────────────────────────────
+const fmtCurrency = (v) =>
+  v === 0 ? '—' : '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Logo
-  try {
-    const response = await fetch('/kmrl_logo.png');
-    const blob = await response.blob();
-    const base64jpeg = await new Promise((resolve) => {
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        // Fill white background to fix transparent PNG rendering black in jsPDF
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL('image/jpeg', 1.0));
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
-    });
-    doc.addImage(base64jpeg, 'JPEG', 14, 5, 30, 15);
-  } catch (err) {
-    console.warn('Failed to load logo for PDF', err);
+const fmtQty = (v) =>
+  v === 0 ? '—' : v.toFixed(3).replace(/\.?0+$/, '');
+
+// ─── Colours ─────────────────────────────────────────────────────────────────
+const GREEN      = [0, 130, 120];   // Metro teal-green
+const GREEN_DARK = [0, 100, 92];
+const WHITE      = [255, 255, 255];
+const GRAY_ROW   = [248, 250, 249]; // subtle alternating row
+
+// ─── Logo helper (canvas → JPEG, white background) ───────────────────────────
+async function loadLogoAsJpeg() {
+  const response = await fetch('/kmrl_logo.png');
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 1.0));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// ─── Draw the professional page header (logo + title + info row) ─────────────
+async function drawPageHeader(doc, month, year, logoJpeg, monthName) {
+  const W = doc.internal.pageSize.getWidth();
+  const margin = 14;
+
+  // ── Logo ──
+  if (logoJpeg) {
+    try { doc.addImage(logoJpeg, 'JPEG', margin, 6, 28, 14); } catch (_) {}
   }
 
-  // Subtitle banner
-  doc.setFillColor(0, 150, 136);
-  doc.rect(14, 25, doc.internal.pageSize.getWidth() - 28, 8, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
+  // ── Organisation name (centre) ──
   doc.setFont('helvetica', 'bold');
-  doc.text('Cleaning Material Consumption (Stations)', doc.internal.pageSize.getWidth() / 2, 31, { align: 'center' });
-
-  // Month banner
-  doc.setFillColor(0, 150, 136);
-  doc.rect(14, 33, doc.internal.pageSize.getWidth() - 28, 8, 'F');
-  const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long' }).toUpperCase();
-  doc.text('Name of Month:', 16, 39);
-  doc.text(`${monthName} ${year}`, doc.internal.pageSize.getWidth() / 2, 39, { align: 'center' });
-  
+  doc.setFontSize(14);
   doc.setTextColor(0, 0, 0);
+  doc.text('KOCHI METRO RAIL LIMITED', W / 2, 12, { align: 'center' });
 
-  // ─── Build item map ─────────────────────────────────────────────────────────
+  // ── Document ref (top-right) ──
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(80, 80, 80);
+  doc.text('KMRL-O&M-OPC-FOR-150', W - margin, 8,  { align: 'right' });
+  doc.text('Revision No: 01',       W - margin, 13, { align: 'right' });
+  doc.text(`Date: ${formatDate(new Date())}`, W - margin, 18, { align: 'right' });
+
+  // ── Separator line ──
+  doc.setDrawColor(...GREEN);
+  doc.setLineWidth(0.5);
+  doc.line(margin, 21, W - margin, 21);
+
+  // ── Title bar ──
+  doc.setFillColor(...GREEN);
+  doc.roundedRect(margin, 23, W - margin * 2, 9, 1, 1, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...WHITE);
+  doc.text('Cleaning Material Consumption (Stations)', W / 2, 29, { align: 'center' });
+
+  // ── Info row ──
+  doc.setFillColor(235, 248, 246);
+  doc.rect(margin, 32, W - margin * 2, 7, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(30, 30, 30);
+  const infoY = 36.5;
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Month: `, margin + 3, infoY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${monthName} ${year}`, margin + 3 + doc.getTextWidth('Month: '), infoY);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Station Type: `, W / 2 - 20, infoY);
+  doc.setFont('helvetica', 'normal');
+  doc.text('All Stations (Aggregated)', W / 2 - 20 + doc.getTextWidth('Station Type: '), infoY);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Generated On: `, W - margin - 60, infoY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(formatDate(new Date()), W - margin - 60 + doc.getTextWidth('Generated On: '), infoY);
+
+  doc.setTextColor(0, 0, 0);
+  return 40; // Y where table should start
+}
+
+// ─── Draw the footer on each page ────────────────────────────────────────────
+function drawPageFooter(doc, logoJpeg, pageNum, totalPages) {
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const footY = H - 10;
+
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, footY - 5, W - margin, footY - 5);
+
+  // Logo (small)
+  if (logoJpeg) {
+    try { doc.addImage(logoJpeg, 'JPEG', margin, footY - 4, 12, 6); } catch (_) {}
+  }
+
+  // Centre text
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(100, 100, 100);
+  doc.text('Metro HK Portal — Housekeeping & Inventory Management System', W / 2, footY - 1, { align: 'center' });
+  doc.text('Generated by Metro HK Portal', W / 2, footY + 3, { align: 'center' });
+
+  // Page number (right)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Page ${pageNum} of ${totalPages}`, W - margin, footY, { align: 'right' });
+  doc.setTextColor(0, 0, 0);
+}
+
+// ─── Main export ─────────────────────────────────────────────────────────────
+export const generateMonthlyBillPdf = async (month, year, consumptionData, allItems = []) => {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  const monthName = new Date(year, month - 1)
+    .toLocaleString('default', { month: 'long' })
+    .toUpperCase();
+
+  // Load logo once
+  let logoJpeg = null;
+  try { logoJpeg = await loadLogoAsJpeg(); } catch (_) { console.warn('Logo load failed'); }
+
+  // ─── Build item map (no changes to calculation logic) ───────────────────────
   const groupedItems = {};
 
-  // Initialise every active master item (ensures all 149 appear even with 0 consumption)
   allItems.forEach(item => {
-    // Exclude items before 2024
     const tYearStr = item.rate_master?.tender_year || '';
     if (tYearStr.toLowerCase().includes('before 2024')) return;
     const startYear = parseInt(tYearStr.split('-')[0]) || 0;
@@ -95,18 +175,15 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     };
   });
 
-  // Accumulate raw base-unit consumption by ALS group
   consumptionData.forEach(log => {
-    const itemId     = log.item_id;
+    const itemId      = log.item_id;
     const stationCode = log.stations?.code;
-    const qty        = Number(log.quantity_used || 0);
+    const qty         = Number(log.quantity_used || 0);
 
-    // Ensure the item exists (consumed items not in master — shouldn't happen but safe)
     if (!groupedItems[itemId]) {
       const tYearStr = log.inventory_items?.rate_master?.tender_year || '';
       if (tYearStr.toLowerCase().includes('before 2024')) return;
       const startYear = parseInt(tYearStr.split('-')[0]) || 0;
-      // Skip if it's explicitly before 2024
       if (startYear > 0 && startYear < 2024) return;
 
       const dbUnit   = log.inventory_items?.unit || 'Nos';
@@ -131,18 +208,15 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     else if (ALS_GROUPS['EMKM-TPHT'].includes(stationCode)) groupedItems[itemId]['EMKM-TPHT'] += qty;
   });
 
-  // ─── Build PDF table rows ────────────────────────────────────────────────────
+  // ─── Build table rows (same calculation, improved display) ──────────────────
   let totalALVA = 0, totalCCUV = 0, totalKALR = 0, totalEMKM = 0, grandTotal = 0;
 
   const tableData = Object.values(groupedItems).map((item, index) => {
     const { dbUnit, nosPerKg, rate } = item;
-
-    // Convert each group's raw qty to billing qty
     const alvaQty = toBillingQty(item['ALVA-KLMT'], dbUnit, nosPerKg);
     const ccuvQty = toBillingQty(item['CCUV-JLSD'], dbUnit, nosPerKg);
     const kalrQty = toBillingQty(item['KALR-KVTR'], dbUnit, nosPerKg);
     const emkmQty = toBillingQty(item['EMKM-TPHT'], dbUnit, nosPerKg);
-
     const totalQty = alvaQty + ccuvQty + kalrQty + emkmQty;
     const amount   = totalQty * rate;
 
@@ -152,56 +226,137 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     totalEMKM += emkmQty * rate;
     grandTotal += amount;
 
-    const fmt  = (v) => v === 0 ? '' : v.toFixed(3).replace(/\.?0+$/, ''); // compact: "1.5" not "1.500"
-
     return [
       index + 1,
       item.name,
       item.brand,
       item.supplier,
-      rate.toFixed(2),
-      fmt(alvaQty),
-      fmt(ccuvQty),
-      fmt(kalrQty),
-      fmt(emkmQty),
-      fmt(totalQty),
-      amount > 0 ? amount.toFixed(2) : '',
+      rate > 0 ? rate.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '—',
+      fmtQty(alvaQty),
+      fmtQty(ccuvQty),
+      fmtQty(kalrQty),
+      fmtQty(emkmQty),
+      fmtQty(totalQty),
+      amount > 0
+        ? amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '—',
     ];
   });
 
-  // Footer totals row
+  // ─── Foot totals row ─────────────────────────────────────────────────────────
   const footData = [[
-    { content: 'TOTAL', colSpan: 5, styles: { halign: 'center', fontStyle: 'bold' } },
-    totalALVA.toFixed(2),
-    totalCCUV.toFixed(2),
-    totalKALR.toFixed(2),
-    totalEMKM.toFixed(2),
-    '',
-    grandTotal.toFixed(2),
+    { content: 'TOTAL', colSpan: 5, styles: { halign: 'center', fontStyle: 'bold', fontSize: 9 } },
+    { content: totalALVA > 0 ? totalALVA.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+    { content: totalCCUV > 0 ? totalCCUV.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+    { content: totalKALR > 0 ? totalKALR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+    { content: totalEMKM > 0 ? totalEMKM.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+    { content: '—', styles: { halign: 'center' } },
+    { content: grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fontSize: 9 } },
   ]];
 
+  // ─── Draw first page header ───────────────────────────────────────────────
+  const startY = await drawPageHeader(doc, month, year, logoJpeg, monthName);
+
+  // ─── autoTable ───────────────────────────────────────────────────────────
+  let pageCount = 0;
   doc.autoTable({
-    startY: 41,
-    head: [['Sl.\nNo', 'Cleaning Material', 'Brand', 'Supplier', 'Rate', 'ALVA-KLMT', 'CCUV-JLSD', 'KALR-KVTR', 'EMKM-TPHT', 'Total', 'Amount (₹)']],
+    startY,
+    head: [[
+      'Sl.\nNo',
+      'Cleaning Material',
+      'Brand',
+      'Supplier',
+      'Rate (₹)',
+      'ALVA-KLMT',
+      'CCUV-JLSD',
+      'KALR-KVTR',
+      'EMKM-TPHT',
+      'Total',
+      'Amount (₹)',
+    ]],
     body: tableData,
     foot: footData,
     showFoot: 'lastPage',
     theme: 'grid',
-    headStyles: { fillColor: [0, 150, 136], textColor: 255, halign: 'center', valign: 'middle' },
-    footStyles: { fillColor: [0, 150, 136], textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 7.5, cellPadding: 2 },
+    headStyles: {
+      fillColor: GREEN,
+      textColor: WHITE,
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+      fontSize: 8,
+      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+    },
+    footStyles: {
+      fillColor: GREEN_DARK,
+      textColor: WHITE,
+      fontStyle: 'bold',
+      fontSize: 9,
+      cellPadding: { top: 4, bottom: 4, left: 2, right: 2 },
+    },
+    styles: {
+      fontSize: 7.5,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
+      valign: 'middle',
+      lineColor: [220, 220, 220],
+      lineWidth: 0.2,
+      overflow: 'linebreak',
+    },
+    alternateRowStyles: {
+      fillColor: GRAY_ROW,
+    },
     columnStyles: {
-      0:  { halign: 'center', cellWidth: 10 },
-      1:  { cellWidth: 45 },
-      4:  { halign: 'right', cellWidth: 15 },
-      5:  { halign: 'center' },
-      6:  { halign: 'center' },
-      7:  { halign: 'center' },
-      8:  { halign: 'center' },
-      9:  { halign: 'center' },
-      10: { halign: 'right', fontStyle: 'bold' },
-    }
+      0:  { halign: 'center', cellWidth: 9,  fontStyle: 'bold' },
+      1:  { cellWidth: 48 },                          // Cleaning Material — widest
+      2:  { cellWidth: 22 },                          // Brand
+      3:  { cellWidth: 24 },                          // Supplier
+      4:  { halign: 'right',  cellWidth: 18 },        // Rate
+      5:  { halign: 'center', cellWidth: 18 },        // ALVA-KLMT
+      6:  { halign: 'center', cellWidth: 18 },        // CCUV-JLSD
+      7:  { halign: 'center', cellWidth: 18 },        // KALR-KVTR
+      8:  { halign: 'center', cellWidth: 18 },        // EMKM-TPHT
+      9:  { halign: 'center', cellWidth: 14 },        // Total
+      10: { halign: 'right',  cellWidth: 22, fontStyle: 'bold' }, // Amount
+    },
+    // Repeat header on every page + re-draw our custom header
+    didDrawPage: (hookData) => {
+      pageCount = hookData.pageNumber;
+      // On pages after the first, redraw the top header
+      if (hookData.pageNumber > 1) {
+        // Async logo already loaded — use synchronous version inside hook
+        if (logoJpeg) {
+          try { doc.addImage(logoJpeg, 'JPEG', 14, 6, 28, 14); } catch (_) {}
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        const W = doc.internal.pageSize.getWidth();
+        doc.text('KOCHI METRO RAIL LIMITED', W / 2, 12, { align: 'center' });
+
+        doc.setDrawColor(...GREEN);
+        doc.setLineWidth(0.5);
+        doc.line(14, 21, W - 14, 21);
+
+        doc.setFillColor(...GREEN);
+        doc.roundedRect(14, 23, W - 28, 9, 1, 1, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(...WHITE);
+        doc.text('Cleaning Material Consumption (Stations)', W / 2, 29, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+      }
+    },
+    margin: { top: 42, left: 14, right: 14, bottom: 16 },
+    pageBreak: 'auto',
+    rowPageBreak: 'avoid',
   });
+
+  // ─── Add footer to every page ────────────────────────────────────────────
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    drawPageFooter(doc, logoJpeg, p, totalPages);
+  }
 
   doc.save(`KMRL_Consumption_Bill_${monthName}_${year}.pdf`);
 };
