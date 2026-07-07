@@ -262,7 +262,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
   doc.autoTable({
     startY,
     head: [[
-      'Sl.\nNo',
+      'Sl. No',
       'Cleaning Material',
       'Brand',
       'Supplier',
@@ -306,17 +306,19 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
       fillColor: GRAY_ROW,
     },
     columnStyles: {
-      0:  { halign: 'center', cellWidth: 9,  fontStyle: 'bold' },
-      1:  { cellWidth: 48 },                          // Cleaning Material — widest
-      2:  { cellWidth: 22 },                          // Brand
-      3:  { cellWidth: 24 },                          // Supplier
-      4:  { halign: 'right',  cellWidth: 18 },        // Rate
-      5:  { halign: 'center', cellWidth: 18 },        // ALVA-KLMT
-      6:  { halign: 'center', cellWidth: 18 },        // CCUV-JLSD
-      7:  { halign: 'center', cellWidth: 18 },        // KALR-KVTR
-      8:  { halign: 'center', cellWidth: 18 },        // EMKM-TPHT
-      9:  { halign: 'center', cellWidth: 14 },        // Total
-      10: { halign: 'right',  cellWidth: 22, fontStyle: 'bold' }, // Amount
+      //  Total column width must = 297mm - 14mm - 14mm = 269mm (full A4 landscape usable)
+      //  13+55+25+27+20+22+22+22+22+16+25 = 269mm ✓
+      0:  { halign: 'center', cellWidth: 13, fontStyle: 'bold' }, // Sl. No — wide enough for '111'
+      1:  { cellWidth: 55 },                         // Cleaning Material — widest
+      2:  { cellWidth: 25 },                         // Brand
+      3:  { cellWidth: 27 },                         // Supplier
+      4:  { halign: 'right',  cellWidth: 20 },       // Rate
+      5:  { halign: 'center', cellWidth: 22 },       // ALVA-KLMT
+      6:  { halign: 'center', cellWidth: 22 },       // CCUV-JLSD
+      7:  { halign: 'center', cellWidth: 22 },       // KALR-KVTR
+      8:  { halign: 'center', cellWidth: 22 },       // EMKM-TPHT
+      9:  { halign: 'center', cellWidth: 16 },       // Total
+      10: { halign: 'right',  cellWidth: 25, fontStyle: 'bold' }, // Amount
     },
     // Repeat header on every page + re-draw our custom header
     didDrawPage: (hookData) => {
@@ -346,7 +348,7 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
         doc.setTextColor(0, 0, 0);
       }
     },
-    margin: { top: 42, left: 14, right: 14, bottom: 16 },
+    margin: { top: 34, left: 14, right: 14, bottom: 16 },
     pageBreak: 'auto',
     rowPageBreak: 'avoid',
   });
