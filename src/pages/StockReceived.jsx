@@ -73,7 +73,8 @@ export default function StockReceived() {
       if (role === ROLES.ALS) {
         const [year, month] = selectedMonth.split('-');
         const startDate = `${year}-${month}-01`;
-        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+        const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
         let logsQuery = supabase.from('stock_received')
           .select('*, inventory_items(name,unit), stations!inner(code,name), users_profile(full_name)')
@@ -102,7 +103,8 @@ export default function StockReceived() {
       } else if (selectedStation?.id) {
         const [year, month] = selectedMonth.split('-');
         const startDate = `${year}-${month}-01`;
-        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+        const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
         const data = await fetchStockReceived(selectedStation.id, { from: startDate, to: endDate });
         setLogs(data);
         const stationsRes = await supabase.from('stations').select('id,code,name').eq('is_active', true);
