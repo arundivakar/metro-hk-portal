@@ -81,7 +81,7 @@ export default function StockReceived() {
 
         let logsQuery = supabase.from('stock_received')
           .select('*, inventory_items(name,unit), stations!inner(code,name), users_profile(full_name)')
-          .neq('supplier', 'Opening Stock Initialization')
+          .or('supplier.neq.Opening Stock Initialization,supplier.is.null')
           .gte('received_date', startDate)
           .lte('received_date', endDate)
           .order('received_date', { ascending: false })

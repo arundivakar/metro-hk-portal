@@ -70,7 +70,7 @@ export function useInventory(stationId) {
         users_profile ( full_name )
       `)
       .eq('station_id', sid)
-      .neq('supplier', 'Opening Stock Initialization')
+      .or('supplier.neq.Opening Stock Initialization,supplier.is.null')
       .order('received_date', { ascending: false });
 
     if (filters.from) query = query.gte('received_date', filters.from);
