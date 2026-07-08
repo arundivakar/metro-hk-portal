@@ -331,11 +331,14 @@ export default function StockMovement() {
       if (itemsErr) throw itemsErr;
 
       // Fetch all consumption logs for the selected month across all stations
+      // Exclude inter-station transfer-out entries — those are stock movements, not actual consumption.
+      // Billing should only reflect real usage at each station.
       const { data, error } = await supabase
         .from('consumption_logs')
         .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg, tender_year)), stations(code)')
         .gte('consumption_date', startDate)
         .lte('consumption_date', endDate)
+        .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
         .limit(5000);
 
       if (error) throw error;

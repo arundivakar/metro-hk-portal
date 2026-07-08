@@ -16,7 +16,7 @@ import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
-import { isVerificationDay } from '../utils/dateHelpers';
+import { isVerificationDay, formatDate } from '../utils/dateHelpers';
 import Alert from '../components/ui/Alert';
 
 // ─── Station Dashboard (HKS / SC) ────────────────────────────────────────────
@@ -40,14 +40,15 @@ function StationDashboard({ station }) {
       const [received, consumed, requests, recentStock, recentConsumption] = await Promise.all([
         supabase.from('stock_received').select('quantity, inventory_items(unit)', { count: 'exact', head: false })
           .eq('station_id', sid).gte('received_date', monthStart)
-          .neq('supplier', 'Opening Stock Initialization'),
+          .or('supplier.neq.Opening Stock Initialization,supplier.is.null'),
         supabase.from('consumption_logs').select('quantity_used, inventory_items(unit)', { count: 'exact', head: false })
-          .eq('station_id', sid).gte('consumption_date', monthStart),
+          .eq('station_id', sid).gte('consumption_date', monthStart)
+          .not('remarks', 'ilike', 'Inter-Station Transfer Out%'),
         supabase.from('consumable_requests').select('id', { count: 'exact', head: false })
           .eq('station_id', sid).in('status', ['pending', 'forwarded_als']),
         supabase.from('stock_received').select('*, inventory_items(name,unit)')
           .eq('station_id', sid).order('created_at', { ascending: false }).limit(5)
-          .neq('supplier', 'Opening Stock Initialization'),
+          .or('supplier.neq.Opening Stock Initialization,supplier.is.null'),
         supabase.from('consumption_logs').select('*, inventory_items(name,unit)')
           .eq('station_id', sid).order('created_at', { ascending: false }).limit(5),
       ]);
@@ -108,7 +109,7 @@ function StationDashboard({ station }) {
     },
     { key: 'item', label: 'Item', sortable: true },
     { key: 'qty', label: 'Quantity' },
-    { key: 'date', label: 'Date' },
+    { key: 'date', label: 'Date', render: (v) => formatDate(v) },
   ];
 
   const lowStockColumns = [
@@ -519,7 +520,7 @@ function ALSDashboard() {
             </div>
             <DataTable
               columns={[
-                { key: 'consumption_date', label: 'Date', sortable: true },
+                { key: 'consumption_date', label: 'Date', sortable: true, render: (v) => formatDate(v) },
                 { key: 'item_name', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },
                 { key: 'quantity_used', label: 'Quantity Used', render: (v, r) => {
                   const dbUnit   = r.inventory_items?.unit ?? 'Nos';

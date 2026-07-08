@@ -174,18 +174,25 @@ export default function PrintChecklist() {
       doc.setFont('helvetica', 'normal');
       doc.text('Revision No: 01', doc.internal.pageSize.getWidth() - 15, 15, { align: 'right' });
       
-      try {
-        const response = await fetch('/kmrl_logo.png');
-        const blob = await response.blob();
-        const base64data = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(blob);
-        });
-        doc.addImage(base64data, 'PNG', 14, 5, 20, 20);
-      } catch (err) {
-        console.warn('Failed to load logo for PDF', err);
-      }
+      // Load logo via canvas to eliminate PNG transparency (shows as black in some PDF viewers)
+      await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const cv = document.createElement('canvas');
+            cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+            const ctx = cv.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, cv.width, cv.height);
+            ctx.drawImage(img, 0, 0);
+            doc.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 14, 5, 22, 22);
+          } catch (_) {}
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = '/kmrl_logo.png';
+      });
 
       // Banner
       doc.setFillColor(0, 150, 136);
