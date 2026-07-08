@@ -230,9 +230,9 @@ export default function PrintChecklist() {
             item.brand_name || '',
             item.supplier || '',
             item.tender_year || '',
-            formatQty(item.in_use, item.unit),
-            formatQty(item.partially_damaged, item.unit),
-            formatQty(item.disposed, item.unit),
+            item.category === 'Consumable' ? formatQty(item.in_use, item.unit) : '—',
+            item.category === 'Consumable' ? formatQty(item.partially_damaged, item.unit) : '—',
+            item.category === 'Consumable' ? formatQty(item.disposed, item.unit) : '—',
             formatQty(balance, item.unit),
             vData.verified ? 'Yes' : 'No',
             vData.remarks || ''
@@ -454,9 +454,9 @@ function VerificationCard({ item, isVerified, vData, formatQty, onToggle, onRema
       {/* Badge row */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '0.35rem' }}>
         <span style={badgeStyle('#0082b0')}>Stock: {formatQty(balance, item.unit) || '0'}</span>
-        {item.in_use > 0 && <span style={badgeStyle('#6c757d')}>In Use: {formatQty(item.in_use, item.unit)}</span>}
-        {item.partially_damaged > 0 && <span style={badgeStyle('#e67e22')}>Damaged: {formatQty(item.partially_damaged, item.unit)}</span>}
-        {item.disposed > 0 && <span style={badgeStyle('#c0392b')}>Disposed: {formatQty(item.disposed, item.unit)}</span>}
+        {item.category === 'Consumable' && item.in_use > 0 && <span style={badgeStyle('#6c757d')}>In Use: {formatQty(item.in_use, item.unit)}</span>}
+        {item.category === 'Consumable' && item.partially_damaged > 0 && <span style={badgeStyle('#e67e22')}>Damaged: {formatQty(item.partially_damaged, item.unit)}</span>}
+        {item.category === 'Consumable' && item.disposed > 0 && <span style={badgeStyle('#c0392b')}>Disposed: {formatQty(item.disposed, item.unit)}</span>}
         <span style={{ ...badgeStyle(isVerified ? '#00b894' : '#aaa'), marginLeft: 'auto' }}>
           {isVerified ? '✓ Verified' : 'Pending'}
         </span>
