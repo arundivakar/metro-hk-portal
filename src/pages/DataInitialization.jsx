@@ -41,7 +41,7 @@ export default function DataInitialization() {
     const fetchData = async () => {
       const [stationRes, itemRes] = await Promise.all([
         supabase.from('stations').select('*').eq('is_active', true),
-        supabase.from('inventory_items').select('id, name, unit, category').order('name')
+        supabase.from('inventory_items').select('id, name, unit, category, rate_master(brand, tender_year)').order('name')
       ]);
 
       if (stationRes.data) {
@@ -482,8 +482,12 @@ export default function DataInitialization() {
                    if (u === 'ml' || u === 'ltr' || u === 'l') displayUnit = 'Ltr';
                    if (u === 'g' || u === 'kg') displayUnit = 'Kg';
                    
-                   const brandStr = item.brand ? ` | ${item.brand}` : '';
-                   const tenderStr = item.tender_year && item.tender_year !== '—' ? ` | ${item.tender_year}` : '';
+                   const rm = Array.isArray(item.rate_master) ? item.rate_master[0] : item.rate_master;
+                   const brand = rm?.brand;
+                   const tenderYear = rm?.tender_year;
+                   
+                   const brandStr = brand ? ` | ${brand}` : '';
+                   const tenderStr = tenderYear && tenderYear !== '—' ? ` | ${tenderYear}` : '';
 
                    return <option key={item.id} value={item.id}>{item.name}{brandStr}{tenderStr} ({displayUnit})</option>;
                 })}
