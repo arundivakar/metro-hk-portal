@@ -481,7 +481,11 @@ export default function DataInitialization() {
                    const u = (item.unit || '').toLowerCase();
                    if (u === 'ml' || u === 'ltr' || u === 'l') displayUnit = 'Ltr';
                    if (u === 'g' || u === 'kg') displayUnit = 'Kg';
-                   return <option key={item.id} value={item.id}>{item.name} ({displayUnit})</option>;
+                   
+                   const brandStr = item.brand ? ` | ${item.brand}` : '';
+                   const tenderStr = item.tender_year && item.tender_year !== '—' ? ` | ${item.tender_year}` : '';
+
+                   return <option key={item.id} value={item.id}>{item.name}{brandStr}{tenderStr} ({displayUnit})</option>;
                 })}
               </select>
             </div>
