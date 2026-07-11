@@ -9,7 +9,7 @@ import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Alert from '../components/ui/Alert';
 import toast from 'react-hot-toast';
-import { FileUp, DatabaseZap, ShieldAlert } from 'lucide-react';
+import { FileUp, DatabaseZap, ShieldAlert, Pencil } from 'lucide-react';
 
 export default function DataInitialization() {
   const { role } = useAuthStore();
@@ -28,20 +28,36 @@ export default function DataInitialization() {
   const [selectedStationId, setSelectedStationId] = useState('');
   const [isUploadingStock, setIsUploadingStock] = useState(false);
   const [stockError, setStockError] = useState('');
+  
+  // Manual Stock State
+  const [items, setItems] = useState([]);
+  const [manualStationId, setManualStationId] = useState('');
+  const [manualItemId, setManualItemId] = useState('');
+  const [manualQty, setManualQty] = useState('');
+  const [isUpdatingManual, setIsUpdatingManual] = useState(false);
+  const [manualError, setManualError] = useState('');
 
   useEffect(() => {
-    const fetchStations = async () => {
-      const { data } = await supabase.from('stations').select('*').eq('is_active', true);
-      if (data) {
-        const sorted = data.sort((a, b) => {
+    const fetchData = async () => {
+      const [stationRes, itemRes] = await Promise.all([
+        supabase.from('stations').select('*').eq('is_active', true),
+        supabase.from('inventory_items').select('id, name, unit, category').order('name')
+      ]);
+
+      if (stationRes.data) {
+        const sorted = stationRes.data.sort((a, b) => {
           const indexA = STATION_ORDER.indexOf(a.code);
           const indexB = STATION_ORDER.indexOf(b.code);
           return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
         });
         setStations(sorted);
       }
+      
+      if (itemRes.data) {
+        setItems(itemRes.data);
+      }
     };
-    fetchStations();
+    fetchData();
   }, []);
 
   const handleMasterUpload = async () => {
@@ -254,6 +270,71 @@ export default function DataInitialization() {
     });
   };
 
+  const handleManualStockUpdate = async () => {
+    if (!manualStationId || !manualItemId || manualQty === '') {
+      return setManualError('Please fill all fields');
+    }
+    
+    setManualError('');
+    setIsUpdatingManual(true);
+    
+    try {
+      const selectedItem = items.find(i => i.id === manualItemId);
+      if (!selectedItem) throw new Error('Item not found');
+      
+      const qty = Number(manualQty);
+      if (isNaN(qty) || qty < 0) throw new Error('Quantity must be a positive number');
+      
+      // Convert to base unit for storage (e.g. Ltr -> ml)
+      let baseQty = qty;
+      const unit = selectedItem.unit || 'Nos';
+      const u = unit.toLowerCase();
+      if (u === 'ml' || u === 'ltr' || u === 'l' || u === 'g' || u === 'kg') {
+        baseQty = qty * 1000;
+      }
+
+      // Check if inventory record already exists for this station/item
+      const { data: existing, error: fetchErr } = await supabase
+        .from('station_inventory')
+        .select('id')
+        .eq('station_id', manualStationId)
+        .eq('item_id', manualItemId)
+        .maybeSingle();
+        
+      if (fetchErr) throw fetchErr;
+
+      const now = new Date().toISOString();
+
+      if (existing) {
+        const { error: updateErr } = await supabase
+          .from('station_inventory')
+          .update({ current_stock: baseQty, last_updated: now })
+          .eq('id', existing.id);
+        if (updateErr) throw updateErr;
+      } else {
+        const { error: insertErr } = await supabase
+          .from('station_inventory')
+          .insert({
+            station_id: manualStationId,
+            item_id: manualItemId,
+            current_stock: baseQty,
+            balance_stock: baseQty,
+            last_updated: now
+          });
+        if (insertErr) throw insertErr;
+      }
+
+      toast.success('Stock updated successfully!');
+      setManualQty('');
+      setManualItemId('');
+    } catch (err) {
+      console.error(err);
+      setManualError(err.message || 'Failed to update stock');
+    } finally {
+      setIsUpdatingManual(false);
+    }
+  };
+
   // Restrict Master List wipe to ALS and PNCU SC
   const canWipeMaster = role === ROLES.ALS || (role === ROLES.SC && selectedStation?.code === 'PNCU');
 
@@ -357,6 +438,75 @@ export default function DataInitialization() {
               style={{ width: '100%' }}
             >
               <FileUp size={16} /> Initialize Station Stock
+            </Button>
+          </CardBody>
+        </Card>
+
+        <Card style={{ borderTop: '4px solid var(--color-warning-500)' }}>
+          <CardHeader 
+            title="3. Manual Stock Adjustment" 
+            icon={<Pencil size={20} color="var(--color-warning-600)" />} 
+          />
+          <CardBody>
+            <Alert variant="warning" style={{ marginBottom: 'var(--space-4)' }}>
+              Use this tool to directly edit the current stock of a specific item at a station. This bypasses CSV uploads and applies immediately.
+            </Alert>
+
+            {manualError && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{manualError}</Alert>}
+
+            <div className="form-group">
+              <label className="form-label form-label-required">Select Station</label>
+              <select 
+                className="form-control" 
+                value={manualStationId} 
+                onChange={(e) => setManualStationId(e.target.value)}
+              >
+                <option value="">— Select Station —</option>
+                {allowedStationsForUser.map(s => (
+                  <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label form-label-required">Select Item</label>
+              <select 
+                className="form-control" 
+                value={manualItemId} 
+                onChange={(e) => setManualItemId(e.target.value)}
+              >
+                <option value="">— Select Item —</option>
+                {items.map(item => {
+                   let displayUnit = 'Nos';
+                   const u = (item.unit || '').toLowerCase();
+                   if (u === 'ml' || u === 'ltr' || u === 'l') displayUnit = 'Ltr';
+                   if (u === 'g' || u === 'kg') displayUnit = 'Kg';
+                   return <option key={item.id} value={item.id}>{item.name} ({displayUnit})</option>;
+                })}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label form-label-required">New Quantity</label>
+              <input 
+                type="number"
+                step="0.01"
+                min="0"
+                className="form-control"
+                placeholder="Enter new quantity in Ltr, Kg, or Nos"
+                value={manualQty}
+                onChange={(e) => setManualQty(e.target.value)}
+              />
+            </div>
+
+            <Button 
+              variant="primary" 
+              onClick={handleManualStockUpdate} 
+              isLoading={isUpdatingManual}
+              disabled={!manualStationId || !manualItemId || manualQty === ''}
+              style={{ width: '100%', background: 'var(--color-warning-600)' }}
+            >
+              <Pencil size={16} /> Update Stock
             </Button>
           </CardBody>
         </Card>
