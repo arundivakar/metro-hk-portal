@@ -10,6 +10,7 @@ import Button from '../components/ui/Button';
 import Alert from '../components/ui/Alert';
 import toast from 'react-hot-toast';
 import { FileUp, DatabaseZap, ShieldAlert, Pencil } from 'lucide-react';
+import { formatStock } from '../utils/units';
 
 export default function DataInitialization() {
   const { role } = useAuthStore();
@@ -36,6 +37,28 @@ export default function DataInitialization() {
   const [manualQty, setManualQty] = useState('');
   const [isUpdatingManual, setIsUpdatingManual] = useState(false);
   const [manualError, setManualError] = useState('');
+  
+  const [currentStockVal, setCurrentStockVal] = useState(null);
+  const [isFetchingStock, setIsFetchingStock] = useState(false);
+
+  useEffect(() => {
+    if (manualStationId && manualItemId) {
+      const fetchStock = async () => {
+        setIsFetchingStock(true);
+        const { data } = await supabase
+          .from('station_inventory')
+          .select('current_stock')
+          .eq('station_id', manualStationId)
+          .eq('item_id', manualItemId)
+          .maybeSingle();
+        setCurrentStockVal(data?.current_stock ?? 0);
+        setIsFetchingStock(false);
+      };
+      fetchStock();
+    } else {
+      setCurrentStockVal(null);
+    }
+  }, [manualStationId, manualItemId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -492,6 +515,15 @@ export default function DataInitialization() {
                    return <option key={item.id} value={item.id}>{item.name}{brandStr}{tenderStr} ({displayUnit})</option>;
                 })}
               </select>
+              {currentStockVal !== null && manualStationId && manualItemId && (
+                <div style={{ marginTop: '0.4rem', fontSize: '0.85rem', color: 'var(--color-primary-700)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  {isFetchingStock ? (
+                    'Fetching current stock...'
+                  ) : (
+                    <>Current Stock: {formatStock(currentStockVal, items.find(i => i.id === manualItemId)?.unit || 'Nos')}</>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="form-group">
