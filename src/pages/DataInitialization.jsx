@@ -341,7 +341,6 @@ export default function DataInitialization() {
             station_id: manualStationId,
             item_id: manualItemId,
             current_stock: baseQty,
-            balance_stock: baseQty,
             last_updated: now
           });
         if (insertErr) throw insertErr;
@@ -349,7 +348,8 @@ export default function DataInitialization() {
 
       toast.success('Stock updated successfully!');
       setManualQty('');
-      setManualItemId('');
+      // Immediately update the current stock display so the user sees the change
+      setCurrentStockVal(baseQty);
     } catch (err) {
       console.error(err);
       setManualError(err.message || 'Failed to update stock');
