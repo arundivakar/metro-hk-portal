@@ -16,7 +16,7 @@ import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
-import { isVerificationDay, formatDate } from '../utils/dateHelpers';
+import { getVerificationPeriodInfo, formatDate } from '../utils/dateHelpers';
 import Alert from '../components/ui/Alert';
 
 // ─── Station Dashboard (HKS / SC) ────────────────────────────────────────────
@@ -24,12 +24,37 @@ function StationDashboard({ station }) {
   const { inventory, fetchInventory, getLowStockItems, isLoading } = useInventory(station?.id);
   const [stats, setStats] = useState({ received: 0, consumed: 0, pendingRequests: 0, recentTx: [] });
   const [loadingStats, setLoadingStats] = useState(true);
+  const [isPeriodVerified, setIsPeriodVerified] = useState(false);
 
   useEffect(() => {
     if (!station?.id) return;
     fetchInventory(station.id);
     loadStats(station.id);
+    checkVerificationStatus(station.id);
   }, [station?.id]); // eslint-disable-line
+
+  const checkVerificationStatus = async (sid) => {
+    const periodInfo = getVerificationPeriodInfo(new Date());
+    if (!periodInfo.isVerificationDay) {
+      setIsPeriodVerified(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('stock_verifications')
+        .select('id')
+        .eq('station_id', sid)
+        .eq('verification_period', periodInfo.period)
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        setIsPeriodVerified(true);
+      } else {
+        setIsPeriodVerified(false);
+      }
+    } catch (err) {
+      console.error('Verification check error:', err);
+    }
+  };
 
   const loadStats = async (sid) => {
     setLoadingStats(true);
@@ -135,7 +160,9 @@ function StationDashboard({ station }) {
 
   const { role, profile } = useAuthStore();
   const isSC = role === ROLES.SC;
-  const showVerificationReminder = isSC && isVerificationDay();
+  
+  const periodInfo = getVerificationPeriodInfo(new Date());
+  const showVerificationReminder = isSC && periodInfo.isVerificationDay && !isPeriodVerified;
 
   // Dynamic greeting
   const hour = new Date().getHours();
@@ -269,10 +296,51 @@ function ALSDashboard() {
   const [stations, setStations] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  
+  const [verificationsMonth, setVerificationsMonth] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
+  const [verifications, setVerifications] = useState([]);
+  const [loadingVerifications, setLoadingVerifications] = useState(true);
 
   useEffect(() => {
     loadALSData();
   }, [alsGroupFilter]);
+
+  useEffect(() => {
+    loadVerifications();
+  }, [verificationsMonth, alsGroupFilter]);
+
+  const loadVerifications = async () => {
+    setLoadingVerifications(true);
+    try {
+      const allowedStations = ALS_GROUPS[alsGroupFilter];
+      const { data, error } = await supabase
+        .from('stock_verifications')
+        .select('*, stations(code)')
+        .eq('verification_month', verificationsMonth)
+        .order('completed_at', { ascending: false });
+
+      if (!error && data) {
+        let finalData = data;
+        if (allowedStations) {
+          finalData = finalData.filter(v => allowedStations.includes(v.stations?.code));
+        }
+        
+        setVerifications(finalData.map(v => ({
+          id: v.id,
+          station: v.stations?.code || '-',
+          verifier: v.verifier_name,
+          empId: v.emp_id,
+          period: v.verification_period.split('-').pop(),
+          date: formatDate(v.completed_at),
+          time: new Date(v.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        })));
+      }
+    } catch (err) {
+      console.error('Verifications fetch error:', err);
+    } finally {
+      setLoadingVerifications(false);
+    }
+  };
 
   const loadALSData = async () => {
     setIsLoading(true);
@@ -420,6 +488,37 @@ function ALSDashboard() {
           colorClass={pendingApprovals > 0 ? 'kpi-icon-danger' : 'kpi-icon-success'}
           change="Requests awaiting your action"
         />
+      </div>
+
+      <div style={{ marginBottom: 'var(--space-6)' }}>
+        <Card>
+          <CardHeader title="Digital Stock Verifications Report" icon={<ClipboardList size={16} />} />
+          <CardBody style={{ padding: 'var(--space-5)' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+              <input
+                type="month"
+                className="form-control"
+                style={{ width: 'auto' }}
+                value={verificationsMonth}
+                onChange={(e) => setVerificationsMonth(e.target.value)}
+              />
+            </div>
+            <DataTable
+              columns={[
+                { key: 'station', label: 'Station' },
+                { key: 'period', label: 'Period' },
+                { key: 'verifier', label: 'Completed By' },
+                { key: 'empId', label: 'Emp ID' },
+                { key: 'date', label: 'Date' },
+                { key: 'time', label: 'Time' }
+              ]}
+              data={verifications}
+              isLoading={loadingVerifications}
+              emptyTitle="No verifications found"
+              emptyDesc={`No digital stock verifications recorded for ${verificationsMonth}.`}
+            />
+          </CardBody>
+        </Card>
       </div>
 
       <div style={{ marginBottom: 'var(--space-6)' }}>

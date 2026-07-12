@@ -3,19 +3,57 @@
  * @param {Date} [date=new Date()]
  * @returns {boolean}
  */
-export function isVerificationDay(date = new Date()) {
-  if (date.getDay() !== 0) return false; // Must be Sunday
+function getNthSunday(year, month, n) {
+  const firstDay = new Date(year, month, 1);
+  const firstSundayDate = 1 + ((7 - firstDay.getDay()) % 7);
+  return new Date(year, month, firstSundayDate + (n - 1) * 7);
+}
 
-  const dayOfMonth = date.getDate();
-  // 1st Sunday: 1-7
-  // 2nd Sunday: 8-14
-  // 3rd Sunday: 15-21
-  // 4th Sunday: 22-28
+export function getVerificationPeriodInfo(date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0-indexed
+
+  // Strip time for accurate date comparison
+  const d = new Date(year, month, date.getDate());
   
-  const isSecondSunday = dayOfMonth >= 8 && dayOfMonth <= 14;
-  const isFourthSunday = dayOfMonth >= 22 && dayOfMonth <= 28;
+  const secondSunday = getNthSunday(year, month, 2);
+  const fourthSunday = getNthSunday(year, month, 4);
 
-  return isSecondSunday || isFourthSunday;
+  let periodMonth = month;
+  let periodYear = year;
+  let periodId = '';
+
+  if (d < secondSunday) {
+    // Before 2nd Sunday -> belongs to Previous Month's P2
+    periodMonth = month - 1;
+    if (periodMonth < 0) {
+      periodMonth = 11;
+      periodYear -= 1;
+    }
+    periodId = 'P2';
+  } else if (d >= secondSunday && d < fourthSunday) {
+    // Between 2nd and 4th Sunday -> Current Month's P1
+    periodId = 'P1';
+  } else {
+    // On or after 4th Sunday -> Current Month's P2
+    periodId = 'P2';
+  }
+
+  const mm = String(periodMonth + 1).padStart(2, '0');
+  const monthStr = `${periodYear}-${mm}`;
+  
+  const isSecond = d.getTime() === secondSunday.getTime();
+  const isFourth = d.getTime() === fourthSunday.getTime();
+
+  return {
+    month: monthStr,
+    period: `${monthStr}-${periodId}`,
+    isVerificationDay: isSecond || isFourth
+  };
+}
+
+export function isVerificationDay(date = new Date()) {
+  return getVerificationPeriodInfo(date).isVerificationDay;
 }
 
 /**

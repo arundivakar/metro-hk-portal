@@ -7,7 +7,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import toast from 'react-hot-toast';
 import { CheckCircle2, Circle, Search, ChevronDown, ChevronUp } from 'lucide-react';
-import { formatDate } from '../utils/dateHelpers';
+import { formatDate, getVerificationPeriodInfo } from '../utils/dateHelpers';
 
 export default function PrintChecklist() {
   const { selectedStation } = useStationStore();
@@ -87,6 +87,14 @@ export default function PrintChecklist() {
         const hasDamaged = item.partially_damaged > 0;
         const hasDisposed = item.disposed > 0;
         return hasStock || hasInUse || hasDamaged || hasDisposed;
+      });
+
+      // Sort: Items with balance stock > 0 first, then alphabetically
+      finalData.sort((a, b) => {
+        const aHasStock = Number(a.current_stock) > 0 ? 1 : 0;
+        const bHasStock = Number(b.current_stock) > 0 ? 1 : 0;
+        if (aHasStock !== bHasStock) return bHasStock - aHasStock;
+        return a.item_name.localeCompare(b.item_name);
       });
 
       setData(finalData);
@@ -298,6 +306,25 @@ export default function PrintChecklist() {
 
       doc.save(`KMRL_Stock_Verification_${selectedStation.code}_${today.replace(/\//g, '-')}.pdf`);
       toast.success('Checklist generated successfully!');
+
+      // Record completion in the database
+      const periodInfo = getVerificationPeriodInfo(new Date());
+      const { error: dbErr } = await supabase
+        .from('stock_verifications')
+        .insert({
+          station_id: selectedStation.id,
+          verifier_name: verifierName.trim(),
+          emp_id: empId.trim(),
+          verification_month: periodInfo.month,
+          verification_period: periodInfo.period
+        });
+        
+      if (dbErr) {
+        console.error('Failed to record verification:', dbErr);
+        toast.error('Checklist saved, but failed to log completion in database.');
+      } else {
+        toast.success('Digital verification completion recorded!');
+      }
 
     } catch (err) {
       console.error('PDF Generation Error:', err);
