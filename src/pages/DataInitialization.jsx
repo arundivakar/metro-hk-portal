@@ -328,23 +328,14 @@ export default function DataInitialization() {
 
       const now = new Date().toISOString();
 
-      if (existing) {
-        const { error: updateErr } = await supabase
-          .from('station_inventory')
-          .update({ current_stock: baseQty, last_updated: now })
-          .eq('id', existing.id);
-        if (updateErr) throw updateErr;
-      } else {
-        const { error: insertErr } = await supabase
-          .from('station_inventory')
-          .insert({
-            station_id: manualStationId,
-            item_id: manualItemId,
-            current_stock: baseQty,
-            last_updated: now
-          });
-        if (insertErr) throw insertErr;
-      }
+      // We use an RPC because station_inventory has RLS policies that block direct client inserts/updates
+      const { error: rpcErr } = await supabase.rpc('fn_adjust_single_stock', {
+        p_station_id: manualStationId,
+        p_item_id: manualItemId,
+        p_new_stock: baseQty
+      });
+      
+      if (rpcErr) throw rpcErr;
 
       toast.success('Stock updated successfully!');
       setManualQty('');
