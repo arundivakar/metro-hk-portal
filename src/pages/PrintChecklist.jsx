@@ -466,7 +466,7 @@ function VerificationCard({ item, isVerified, vData, formatQty, onToggle, onRema
             {item.item_name}
           </div>
           <div style={{ fontSize: '0.72rem', color: '#888', lineHeight: 1.2 }}>
-            {[item.brand_name, item.supplier].filter(Boolean).join(' · ')}
+            {[item.brand_name, item.supplier, item.tender_year ? `Tender: ${item.tender_year}` : null].filter(Boolean).join(' · ')}
           </div>
         </div>
         <button
