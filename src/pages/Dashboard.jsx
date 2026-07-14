@@ -64,12 +64,13 @@ function StationDashboard({ station }) {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
       const [received, consumed, requests, recentStock, recentConsumption, zeroStock] = await Promise.all([
-        supabase.from('stock_received').select('id', { count: 'exact', head: false })
+        supabase.from('stock_received').select('*', { count: 'exact', head: true })
           .eq('station_id', sid).gte('received_date', monthStart)
           .or('supplier.neq.Opening Stock Initialization,supplier.is.null'),
-        supabase.from('consumption_logs').select('id', { count: 'exact', head: false })
+        supabase.from('consumption_logs').select('*', { count: 'exact', head: true })
           .eq('station_id', sid).gte('consumption_date', monthStart)
-          .not('remarks', 'ilike', 'Inter-Station Transfer Out%'),
+          .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
+          .not('remarks', 'ilike', 'Depot Transfer Out%'),
         supabase.from('consumable_requests').select('id', { count: 'exact', head: false })
           .eq('station_id', sid).in('status', ['pending', 'forwarded_als']),
         supabase.from('stock_received').select('id, quantity, received_date, created_at, inventory_items(name,unit)')
@@ -224,13 +225,6 @@ function StationDashboard({ station }) {
 
       {/* KPI Cards */}
       <div className="kpi-grid">
-        <KpiCard
-          label="Items in Stock"
-          value={isLoading ? '…' : totalItems}
-          icon={<Package size={20} />}
-          colorClass="kpi-icon-primary"
-          change="Active inventory items"
-        />
         <KpiCard
           label="Receipts This Month"
           value={loadingStats ? '…' : stats.receivedCount}

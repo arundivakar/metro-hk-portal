@@ -59,6 +59,18 @@ export default function StockReceived() {
   // Maps station_id → current_stock (base units) for the selected item
   const [stationStockMap, setStationStockMap] = useState({});
 
+  // ── Depot Transfer State (MUTT SC only) ─────────────────────────────────────
+  const [showDepotForm, setShowDepotForm] = useState(false);
+  const [depotForm, setDepotForm] = useState({
+    source_station_id: '',
+    item_id: '',
+    quantity: '',
+    transfer_date: today,
+    remarks: '',
+  });
+  const [depotStockMap, setDepotStockMap] = useState({});
+  const [depotItems, setDepotItems] = useState([]);
+
   const [newItemForm, setNewItemForm] = useState({
     item_name: '', category: 'Consumable', unit: 'Nos', base_rate: '', gst_percent: '18', unit_rate: '', tender_year: '', brand: '', remarks: ''
   });
@@ -290,6 +302,70 @@ export default function StockReceived() {
     }
   };
 
+  // Depot Transfer: fetch item stock when source station changes
+  const handleDepotStationChange = async (stationId) => {
+    setDepotForm(f => ({ ...f, source_station_id: stationId, item_id: '', quantity: '' }));
+    setDepotItems([]);
+    setDepotStockMap({});
+    if (!stationId) return;
+    // Fetch inventory for the selected source station that has stock > 0
+    const { data } = await supabase
+      .from('station_inventory')
+      .select('item_id, current_stock, inventory_items(id, name, unit)')
+      .eq('station_id', stationId)
+      .gt('current_stock', 0);
+    const map = {};
+    const itemList = [];
+    (data || []).forEach(r => {
+      map[r.item_id] = r.current_stock;
+      if (r.inventory_items) itemList.push(r.inventory_items);
+    });
+    setDepotStockMap(map);
+    setDepotItems(itemList);
+  };
+
+  const handleDepotTransferSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!depotForm.source_station_id || !depotForm.item_id || !depotForm.quantity || !depotForm.transfer_date) {
+      setError('All fields are required.');
+      return;
+    }
+    const depotItem = depotItems.find(i => i.id === depotForm.item_id);
+    const baseQty = toBaseValue(parseFloat(depotForm.quantity), depotItem?.unit || 'Nos');
+    const srcAvail = depotStockMap[depotForm.item_id] || 0;
+    if (baseQty > srcAvail) {
+      const dispUnit = getDisplayUnit(depotItem?.unit || 'Nos');
+      const availDisp = toDisplayValue(srcAvail, depotItem?.unit || 'Nos');
+      const availFmt = dispUnit === 'Nos' ? `${Math.round(availDisp)} Nos` : `${availDisp.toFixed(2)} ${dispUnit}`;
+      setError(`Insufficient stock at source station. Available: ${availFmt}`);
+      return;
+    }
+    const sourceStation = stations.find(s => s.id === depotForm.source_station_id);
+    setSubmitting(true);
+    try {
+      const { error: rpcErr } = await supabase.rpc('fn_transfer_to_depot', {
+        p_source_station_id:   depotForm.source_station_id,
+        p_item_id:             depotForm.item_id,
+        p_quantity:            baseQty,
+        p_transfer_date:       depotForm.transfer_date,
+        p_source_station_code: sourceStation?.code || '',
+        p_logged_by:           profile.id,
+        p_remarks:             depotForm.remarks || null,
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
+      toast.success(`Stock from ${sourceStation?.code} transferred to Depot successfully!`);
+      setShowDepotForm(false);
+      setDepotForm({ source_station_id: '', item_id: '', quantity: '', transfer_date: today, remarks: '' });
+      setDepotItems([]);
+      setDepotStockMap({});
+    } catch (err) {
+      setError(err.message.includes('Insufficient') ? err.message : 'Transfer failed: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Stations that have stock > 0 for the selected item (used to filter source dropdown)
   const availableSourceStations = stations.filter(s => {
     if (s.id === selectedStation?.id) return false; // exclude self
@@ -324,6 +400,7 @@ export default function StockReceived() {
           const srcStation = stations.find(s => s.id === row.source_station_id);
           return srcStation ? `${srcStation.code}` : 'Other Station';
         }
+        if (row.supplier === 'DEPOT') return '🏭 Depot';
         return row.supplier || 'KDS';
     }},
     { key: 'invoice_number', label: 'Invoice #', render: (v) => v ?? '—' },
@@ -370,9 +447,21 @@ export default function StockReceived() {
             </Button>
           )}
           {role === ROLES.SC && (
-            <Button variant="accent" leftIcon={<PackagePlus size={16} />} onClick={() => setShowForm(true)}>
-              Receive Stock
-            </Button>
+            <>
+              {selectedStation?.code === 'MUTT' && (
+                <Button
+                  variant="outline"
+                  leftIcon={<PackagePlus size={16} />}
+                  onClick={() => { setShowDepotForm(true); setError(''); }}
+                  style={{ borderColor: 'var(--color-warning-400)', color: 'var(--color-warning-700)' }}
+                >
+                  Send to Depot
+                </Button>
+              )}
+              <Button variant="accent" leftIcon={<PackagePlus size={16} />} onClick={() => setShowForm(true)}>
+                Receive Stock
+              </Button>
+            </>
           )}
         </div>
       }
@@ -456,8 +545,9 @@ export default function StockReceived() {
             <div className="form-group">
               <label className="form-label form-label-required" htmlFor="sr-source">Received From (Source)</label>
               <select id="sr-source" className="form-control" value={form.source_station_id}
-                onChange={(e) => setForm(f => ({ ...f, source_station_id: e.target.value, supplier: e.target.value === '' ? 'KDS' : '', quantity: '' }))}>
+                onChange={(e) => setForm(f => ({ ...f, source_station_id: e.target.value, supplier: e.target.value === '' ? (selectedItem?.rate_master?.supplier || 'KDS') : e.target.value === 'DEPOT' ? 'DEPOT' : '', quantity: '' }))}>
                 <option value="">Main Store (KDS / Supplier)</option>
+                <option value="DEPOT">🏭 Depot</option>
                 <optgroup label="Inter-Station Transfer">
                   {availableSourceStations.map(s => (
                     <option key={s.id} value={s.id}>
@@ -473,16 +563,15 @@ export default function StockReceived() {
                 </optgroup>
               </select>
             </div>
-            {form.source_station_id === '' && (
+            {(form.source_station_id === '' || form.source_station_id === 'DEPOT') && (
               <div className="form-group">
                 <label className="form-label" htmlFor="sr-supplier">External Supplier Name</label>
                 <input id="sr-supplier" type="text" className="form-control" placeholder="Optional"
                   value={form.supplier} onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))} />
               </div>
             )}
-          </div>
-          {/* Available stock info for inter-station transfer */}
-          {form.source_station_id && selectedItem && (() => {
+            {/* Stock transfer stock-info alert: only for inter-station, not DEPOT */}
+            {form.source_station_id && form.source_station_id !== 'DEPOT' && selectedItem && (() => {
             const unit = selectedItem.unit || 'Nos';
             const dispUnit = getDisplayUnit(unit);
             const raw = stationStockMap[form.source_station_id] || 0;
@@ -496,6 +585,7 @@ export default function StockReceived() {
               </Alert>
             );
           })()}
+          </div>
           {selectedItem && form.quantity && form.unit_rate && (
             <Alert variant="info" style={{ marginBottom: 'var(--space-3)' }}>
               Total Value: ₹{(parseFloat(form.quantity) * parseFloat(form.unit_rate)).toFixed(2)}
@@ -506,6 +596,86 @@ export default function StockReceived() {
             <textarea id="sr-remarks" className="form-control" rows={2}
               value={form.remarks} onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))} />
           </div>
+        </form>
+      </Modal>
+      )}
+
+      {/* MUTT SC ONLY: Send to Depot Modal */}
+      {selectedStation?.code === 'MUTT' && role === ROLES.SC && (
+      <Modal
+        isOpen={showDepotForm}
+        onClose={() => { setShowDepotForm(false); setError(''); }}
+        title="Send Stock to Depot"
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setShowDepotForm(false); setError(''); }}>Cancel</Button>
+            <Button variant="warning" form="depot-form" type="submit" isLoading={submitting}>Confirm Transfer to Depot</Button>
+          </>
+        }
+      >
+        <Alert variant="warning" style={{ marginBottom: 'var(--space-4)' }}>
+          <strong>Depot Transfer:</strong> Stock will be deducted from the selected station. This action creates an audit log and <strong>does not affect billing</strong>.
+        </Alert>
+        {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
+        <form id="depot-form" onSubmit={handleDepotTransferSubmit}>
+          <div className="form-group">
+            <label className="form-label form-label-required">Source Station (Stock Coming From)</label>
+            <select className="form-control" value={depotForm.source_station_id}
+              onChange={(e) => handleDepotStationChange(e.target.value)} required>
+              <option value="">— Select Station —</option>
+              {stations.filter(s => s.id !== selectedStation?.id).map(s => (
+                <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
+              ))}
+            </select>
+          </div>
+          {depotForm.source_station_id && (
+            <div className="form-group">
+              <label className="form-label form-label-required">Item</label>
+              <select className="form-control" value={depotForm.item_id}
+                onChange={(e) => setDepotForm(f => ({ ...f, item_id: e.target.value, quantity: '' }))} required>
+                <option value="">— Select Item —</option>
+                {depotItems.map(i => {
+                  const dispUnit = getDisplayUnit(i.unit);
+                  const raw = depotStockMap[i.id] || 0;
+                  const dispVal = toDisplayValue(raw, i.unit);
+                  const fmt = dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+                  return <option key={i.id} value={i.id}>{i.name} (Stock: {fmt})</option>;
+                })}
+              </select>
+              {depotItems.length === 0 && <small style={{ color: 'var(--color-warning-600)' }}>No items with stock found at this station.</small>}
+            </div>
+          )}
+          {depotForm.item_id && (() => {
+            const depotItem = depotItems.find(i => i.id === depotForm.item_id);
+            const unit = depotItem?.unit || 'Nos';
+            const dispUnit = getDisplayUnit(unit);
+            const raw = depotStockMap[depotForm.item_id] || 0;
+            const dispVal = toDisplayValue(raw, unit);
+            const fmt = dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+            return (
+              <>
+                <Alert variant="info" style={{ marginBottom: 'var(--space-3)' }}>Available at source: <strong>{fmt}</strong></Alert>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label className="form-label form-label-required">Quantity ({dispUnit})</label>
+                    <input type="number" min="0.001" step="any" className="form-control"
+                      value={depotForm.quantity} onChange={(e) => setDepotForm(f => ({ ...f, quantity: e.target.value }))} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label form-label-required">Transfer Date</label>
+                    <input type="date" className="form-control"
+                      value={depotForm.transfer_date} onChange={(e) => setDepotForm(f => ({ ...f, transfer_date: e.target.value }))} required />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Remarks (Optional)</label>
+                  <textarea className="form-control" rows={2}
+                    value={depotForm.remarks} onChange={(e) => setDepotForm(f => ({ ...f, remarks: e.target.value }))} />
+                </div>
+              </>
+            );
+          })()}
         </form>
       </Modal>
       )}
