@@ -514,7 +514,7 @@ export default function StockMovement() {
           />
           <DataTable
             columns={historyColumns}
-            data={consumptionLogs.filter(l => historyItemFilter === 'All' || l.item_id === historyItemFilter).map(l => ({ ...l, id: l.id }))}
+            data={consumptionLogs.filter(l => historyItemFilter === 'All' || l.item_id === historyItemFilter).sort((a, b) => new Date(b.consumption_date) - new Date(a.consumption_date) || new Date(b.created_at) - new Date(a.created_at)).map(l => ({ ...l, id: l.id }))}
             isLoading={isLoading}
             emptyTitle="No consumptions recorded"
             emptyDesc="Entries will appear here when you log consumption."

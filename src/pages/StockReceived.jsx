@@ -269,7 +269,14 @@ export default function StockReceived() {
   // Fetch per-station stock when item changes, to power source dropdown filtering
   const handleItemChange = async (val) => {
     const item = items.find((i) => i.id === val);
-    setForm((f) => ({ ...f, item_id: val, unit_rate: item?.rate_master?.unit_rate ?? '', source_station_id: '', quantity: '' }));
+    setForm((f) => ({ 
+      ...f, 
+      item_id: val, 
+      unit_rate: item?.rate_master?.unit_rate ?? '', 
+      source_station_id: '', 
+      supplier: item?.rate_master?.supplier || 'KDS',
+      quantity: '' 
+    }));
     if (val) {
       const { data } = await supabase
         .from('v_station_inventory_summary')
