@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { toDisplayValue, getDisplayUnit, toBillingQty } from '../utils/units';
 import {
   Package, PackagePlus, TrendingDown, AlertTriangle,
-  ClipboardList, Clock, Activity, Building2,
+  ClipboardList, Clock, Activity, Building2, ShoppingCart, Layers, CheckCircle2,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { KpiCard } from '../components/ui/Card';
@@ -22,7 +22,7 @@ import Alert from '../components/ui/Alert';
 // ─── Station Dashboard (HKS / SC) ────────────────────────────────────────────
 function StationDashboard({ station }) {
   const { inventory, fetchInventory, getLowStockItems, isLoading } = useInventory(station?.id);
-  const [stats, setStats] = useState({ received: 0, consumed: 0, pendingRequests: 0, recentTx: [] });
+  const [stats, setStats] = useState({ receivedCount: 0, consumedCount: 0, zeroStockCount: 0, todayIn: 0, todayOut: 0, pendingRequests: 0, recentTx: [] });
   const [loadingStats, setLoadingStats] = useState(true);
   const [isPeriodVerified, setIsPeriodVerified] = useState(false);
 
@@ -60,28 +60,28 @@ function StationDashboard({ station }) {
     setLoadingStats(true);
     try {
       const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
-      const [received, consumed, requests, recentStock, recentConsumption] = await Promise.all([
-        supabase.from('stock_received').select('quantity, inventory_items(unit)', { count: 'exact', head: false })
+      const [received, consumed, requests, recentStock, recentConsumption, zeroStock] = await Promise.all([
+        supabase.from('stock_received').select('id', { count: 'exact', head: false })
           .eq('station_id', sid).gte('received_date', monthStart)
           .or('supplier.neq.Opening Stock Initialization,supplier.is.null'),
-        supabase.from('consumption_logs').select('quantity_used, inventory_items(unit)', { count: 'exact', head: false })
+        supabase.from('consumption_logs').select('id', { count: 'exact', head: false })
           .eq('station_id', sid).gte('consumption_date', monthStart)
           .not('remarks', 'ilike', 'Inter-Station Transfer Out%'),
         supabase.from('consumable_requests').select('id', { count: 'exact', head: false })
           .eq('station_id', sid).in('status', ['pending', 'forwarded_als']),
-        supabase.from('stock_received').select('*, inventory_items(name,unit)')
-          .eq('station_id', sid).order('created_at', { ascending: false }).limit(5)
+        supabase.from('stock_received').select('id, quantity, received_date, created_at, inventory_items(name,unit)')
+          .eq('station_id', sid).order('received_date', { ascending: false }).order('created_at', { ascending: false }).limit(10)
           .or('supplier.neq.Opening Stock Initialization,supplier.is.null'),
-        supabase.from('consumption_logs').select('*, inventory_items(name,unit)')
-          .eq('station_id', sid).order('created_at', { ascending: false }).limit(5),
+        supabase.from('consumption_logs').select('id, quantity_used, consumption_date, created_at, inventory_items(name,unit)')
+          .eq('station_id', sid).order('consumption_date', { ascending: false }).order('created_at', { ascending: false }).limit(10),
+        supabase.from('station_inventory').select('id', { count: 'exact', head: false })
+          .eq('station_id', sid).lte('current_stock', 0),
       ]);
 
-      const receivedTotal = (received.data ?? []).reduce((s, r) => s + toDisplayValue(r.quantity, r.inventory_items?.unit), 0);
-      const consumedTotal = (consumed.data ?? []).reduce((s, r) => s + toDisplayValue(r.quantity_used, r.inventory_items?.unit), 0);
-
-      // Merge and sort recent transactions
+      // Merge and sort recent transactions by date then created_at
       const txs = [
         ...(recentStock.data ?? []).map((r) => {
           const dbUnit = r.inventory_items?.unit ?? 'Nos';
@@ -105,11 +105,20 @@ function StationDashboard({ station }) {
             date: r.consumption_date, time: r.created_at,
           };
         }),
-      ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
+      ].sort((a, b) => {
+        const dateDiff = new Date(b.date) - new Date(a.date);
+        return dateDiff !== 0 ? dateDiff : new Date(b.time) - new Date(a.time);
+      }).slice(0, 10);
+
+      const todayIn = txs.filter(t => t.type === 'in' && t.date === todayStr).length;
+      const todayOut = txs.filter(t => t.type === 'out' && t.date === todayStr).length;
 
       setStats({
-        received: receivedTotal.toFixed(2),
-        consumed: consumedTotal.toFixed(2),
+        receivedCount: received.count ?? 0,
+        consumedCount: consumed.count ?? 0,
+        zeroStockCount: zeroStock.count ?? 0,
+        todayIn,
+        todayOut,
         pendingRequests: requests.count ?? 0,
         recentTx: txs,
       });
@@ -223,18 +232,25 @@ function StationDashboard({ station }) {
           change="Active inventory items"
         />
         <KpiCard
-          label="Stock Received (Month)"
-          value={loadingStats ? '…' : stats.received}
+          label="Receipts This Month"
+          value={loadingStats ? '…' : stats.receivedCount}
           icon={<PackagePlus size={20} />}
           colorClass="kpi-icon-success"
-          change="Total units received this month"
+          change="Stock received entries this month"
         />
         <KpiCard
-          label="Consumed (Month)"
-          value={loadingStats ? '…' : stats.consumed}
-          icon={<TrendingDown size={20} />}
+          label="Consumption Entries"
+          value={loadingStats ? '…' : stats.consumedCount}
+          icon={<ShoppingCart size={20} />}
           colorClass="kpi-icon-warning"
-          change="Total units consumed this month"
+          change="Consumption logs this month"
+        />
+        <KpiCard
+          label="Zero Stock Items"
+          value={loadingStats ? '…' : stats.zeroStockCount}
+          icon={<Layers size={20} />}
+          colorClass={stats.zeroStockCount > 0 ? 'kpi-icon-danger' : 'kpi-icon-success'}
+          change={stats.zeroStockCount > 0 ? 'Items with no stock remaining' : 'All items have stock'}
         />
         <KpiCard
           label="Low Stock Alerts"
@@ -252,11 +268,27 @@ function StationDashboard({ station }) {
         />
       </div>
 
+      {/* Today's quick summary bar */}
+      {!loadingStats && (stats.todayIn > 0 || stats.todayOut > 0) && (
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
+          {stats.todayIn > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--color-success-50)', border: '1px solid var(--color-success-200)', borderRadius: '8px', padding: '6px 14px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-success-700)' }}>
+              <CheckCircle2 size={14} /> {stats.todayIn} stock receipt{stats.todayIn > 1 ? 's' : ''} today
+            </div>
+          )}
+          {stats.todayOut > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--color-warning-50)', border: '1px solid var(--color-warning-200)', borderRadius: '8px', padding: '6px 14px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-warning-700)' }}>
+              <TrendingDown size={14} /> {stats.todayOut} consumption{stats.todayOut > 1 ? 's' : ''} today
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Two-column content */}
       <div className="two-col-grid">
         {/* Recent Transactions */}
         <Card>
-          <CardHeader title="Recent Transactions" icon={<Clock size={16} />} />
+          <CardHeader title="Recent Transactions" icon={<Clock size={16} />} subtitle={`Latest ${stats.recentTx.length} entries`} />
           <CardBody style={{ padding: 0 }}>
             <DataTable
               columns={txColumns}
