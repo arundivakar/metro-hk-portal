@@ -60,25 +60,25 @@ function StationDashboard({ station }) {
     setLoadingStats(true);
     try {
       const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
       const [received, consumed, requests, recentStock, recentConsumption, zeroStock] = await Promise.all([
-        supabase.from('stock_received').select('*', { count: 'exact', head: true })
+        supabase.from('stock_received').select('received_date', { count: 'exact' })
           .eq('station_id', sid).gte('received_date', monthStart)
           .or('supplier.neq.Opening Stock Initialization,supplier.is.null'),
-        supabase.from('consumption_logs').select('*', { count: 'exact', head: true })
+        supabase.from('consumption_logs').select('consumption_date', { count: 'exact' })
           .eq('station_id', sid).gte('consumption_date', monthStart)
           .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
           .not('remarks', 'ilike', 'Depot Transfer Out%'),
-        supabase.from('consumable_requests').select('id', { count: 'exact', head: false })
+        supabase.from('consumable_requests').select('id', { count: 'exact' })
           .eq('station_id', sid).in('status', ['pending', 'forwarded_als']),
         supabase.from('stock_received').select('id, quantity, received_date, created_at, inventory_items(name,unit)')
           .eq('station_id', sid).order('received_date', { ascending: false }).order('created_at', { ascending: false }).limit(10)
           .or('supplier.neq.Opening Stock Initialization,supplier.is.null'),
         supabase.from('consumption_logs').select('id, quantity_used, consumption_date, created_at, inventory_items(name,unit)')
           .eq('station_id', sid).order('consumption_date', { ascending: false }).order('created_at', { ascending: false }).limit(10),
-        supabase.from('station_inventory').select('id', { count: 'exact', head: false })
+        supabase.from('station_inventory').select('id', { count: 'exact' })
           .eq('station_id', sid).lte('current_stock', 0),
       ]);
 
