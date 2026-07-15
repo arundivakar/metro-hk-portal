@@ -66,6 +66,7 @@ export default function StockReceived() {
     item_id: '',
     quantity: '',
     transfer_date: today,
+    destination: 'Depot', // 'Depot' or 'CCR'
     remarks: '',
   });
   const [depotStockMap, setDepotStockMap] = useState({});
@@ -352,12 +353,12 @@ export default function StockReceived() {
         p_transfer_date:       depotForm.transfer_date,
         p_source_station_code: sourceStation?.code || '',
         p_logged_by:           profile.id,
-        p_remarks:             depotForm.remarks || null,
+        p_remarks:             `to ${depotForm.destination}${depotForm.remarks ? ' - ' + depotForm.remarks : ''}`,
       });
       if (rpcErr) throw new Error(rpcErr.message);
-      toast.success(`Stock from ${sourceStation?.code} transferred to Depot successfully!`);
+      toast.success(`Stock from ${sourceStation?.code} transferred to ${depotForm.destination} successfully!`);
       setShowDepotForm(false);
-      setDepotForm({ source_station_id: '', item_id: '', quantity: '', transfer_date: today, remarks: '' });
+      setDepotForm({ source_station_id: '', item_id: '', quantity: '', transfer_date: today, destination: 'Depot', remarks: '' });
       setDepotItems([]);
       setDepotStockMap({});
     } catch (err) {
@@ -456,7 +457,7 @@ export default function StockReceived() {
                   onClick={() => { setShowDepotForm(true); setError(''); }}
                   style={{ borderColor: 'var(--color-warning-400)', color: 'var(--color-warning-700)' }}
                 >
-                  Send to Depot
+                  Ext. Transfer
                 </Button>
               )}
               <Button variant="accent" leftIcon={<PackagePlus size={16} />} onClick={() => setShowForm(true)}>
@@ -601,25 +602,40 @@ export default function StockReceived() {
       </Modal>
       )}
 
-      {/* MUTT SC ONLY: Send to Depot Modal */}
+      {/* MUTT SC ONLY: External Transfer Modal (Depot / CCR) */}
       {selectedStation?.code === 'MUTT' && role === ROLES.SC && (
       <Modal
         isOpen={showDepotForm}
         onClose={() => { setShowDepotForm(false); setError(''); }}
-        title="Send Stock to Depot"
+        title="External Location Transfer"
         size="md"
         footer={
           <>
             <Button variant="outline" onClick={() => { setShowDepotForm(false); setError(''); }}>Cancel</Button>
-            <Button variant="warning" form="depot-form" type="submit" isLoading={submitting}>Confirm Transfer to Depot</Button>
+            <Button variant="warning" form="depot-form" type="submit" isLoading={submitting}>Confirm Transfer</Button>
           </>
         }
       >
         <Alert variant="warning" style={{ marginBottom: 'var(--space-4)' }}>
-          <strong>Depot Transfer:</strong> Stock will be deducted from the selected station. This action creates an audit log and <strong>does not affect billing</strong>.
+          <strong>External Transfer:</strong> Stock will be deducted from the selected station. This creates an audit log and <strong>does not affect billing</strong>.
         </Alert>
         {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
         <form id="depot-form" onSubmit={handleDepotTransferSubmit}>
+          {/* Destination selector */}
+          <div className="form-group">
+            <label className="form-label form-label-required">Destination</label>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '4px' }}>
+              {['Depot', 'CCR'].map(dest => (
+                <label key={dest} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: depotForm.destination === dest ? 700 : 400 }}>
+                  <input type="radio" name="ext-destination" value={dest}
+                    checked={depotForm.destination === dest}
+                    onChange={() => setDepotForm(f => ({ ...f, destination: dest }))}
+                  />
+                  {dest === 'Depot' ? '🏭 Depot' : '🏢 CCR'}
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="form-group">
             <label className="form-label form-label-required">Source Station (Stock Coming From)</label>
             <select className="form-control" value={depotForm.source_station_id}

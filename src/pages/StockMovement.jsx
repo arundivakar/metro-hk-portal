@@ -158,10 +158,11 @@ export default function StockMovement() {
         .filter(l => l.consumption_date <= endDateStr)
         .reduce((sum, l) => sum + Number(l.quantity_used), 0);
 
-      // Split consumed into: actual consumption vs inter-station transfer-out
+      // Split consumed into: actual consumption vs inter-station / depot transfer-out
       // Closing / opening stock calculations remain identical (both are in consumption_logs)
       const transferOutDuringMonth = itemConsumptions
-        .filter(l => l.consumption_date <= endDateStr && l.remarks?.startsWith('Inter-Station Transfer Out'))
+        .filter(l => l.consumption_date <= endDateStr && 
+          (l.remarks?.startsWith('Inter-Station Transfer Out') || l.remarks?.startsWith('Depot Transfer Out')))
         .reduce((sum, l) => sum + Number(l.quantity_used), 0);
       const realConsumedDuringMonth = consumptionsDuringMonth - transferOutDuringMonth;
 
@@ -339,6 +340,7 @@ export default function StockMovement() {
         .gte('consumption_date', startDate)
         .lte('consumption_date', endDate)
         .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
+        .not('remarks', 'ilike', 'Depot Transfer Out%')
         .limit(5000);
 
       if (error) throw error;
@@ -401,10 +403,11 @@ export default function StockMovement() {
       }
     },
     { key: 'type', label: 'Type', render: (_, r) => {
-        const isTransferOut = r.remarks?.startsWith('Inter-Station Transfer Out');
-        return isTransferOut
-          ? <span style={{ background: 'var(--color-warning-100)', color: 'var(--color-warning-700)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>🔄 Transfer Out</span>
-          : <span style={{ background: 'var(--color-primary-50)', color: 'var(--color-primary-700)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>Consumed</span>;
+        const isInterTransfer = r.remarks?.startsWith('Inter-Station Transfer Out');
+        const isDepotTransfer = r.remarks?.startsWith('Depot Transfer Out');
+        if (isInterTransfer) return <span style={{ background: 'var(--color-warning-100)', color: 'var(--color-warning-700)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>🔄 Transfer Out</span>;
+        if (isDepotTransfer) return <span style={{ background: '#f3e8ff', color: '#7c3aed', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>🏭 Ext. Transfer</span>;
+        return <span style={{ background: 'var(--color-primary-50)', color: 'var(--color-primary-700)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>Consumed</span>;
       }
     },
     { key: 'remarks', label: 'Remarks', render: (v) => v || '—' },
@@ -413,7 +416,7 @@ export default function StockMovement() {
       label: 'Actions', 
       render: (_, row) => {
         // Transfer-out logs are system-generated paired records — do not allow editing/deleting
-        const isTransferOut = row.remarks?.startsWith('Inter-Station Transfer Out');
+        const isTransferOut = row.remarks?.startsWith('Inter-Station Transfer Out') || row.remarks?.startsWith('Depot Transfer Out');
         if (isTransferOut) {
           return <span style={{ fontSize: '0.78rem', color: 'var(--color-gray-400)', fontStyle: 'italic' }}>System record</span>;
         }
