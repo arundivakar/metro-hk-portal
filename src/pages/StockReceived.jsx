@@ -308,17 +308,18 @@ export default function StockReceived() {
     setDepotItems([]);
     setDepotStockMap({});
     if (!stationId) return;
-    // Fetch inventory for the selected source station that has stock > 0
+    // Use the existing summary view which correctly joins station_inventory + inventory_items
     const { data } = await supabase
-      .from('station_inventory')
-      .select('item_id, current_stock, inventory_items(id, name, unit)')
+      .from('v_station_inventory_summary')
+      .select('item_id, item_name, unit, current_stock')
       .eq('station_id', stationId)
-      .gt('current_stock', 0);
+      .gt('current_stock', 0)
+      .order('item_name');
     const map = {};
     const itemList = [];
     (data || []).forEach(r => {
       map[r.item_id] = r.current_stock;
-      if (r.inventory_items) itemList.push(r.inventory_items);
+      itemList.push({ id: r.item_id, name: r.item_name, unit: r.unit });
     });
     setDepotStockMap(map);
     setDepotItems(itemList);
