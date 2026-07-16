@@ -518,37 +518,6 @@ function ALSDashboard() {
 
       <div style={{ marginBottom: 'var(--space-6)' }}>
         <Card>
-          <CardHeader title="Digital Stock Verifications Report" icon={<ClipboardList size={16} />} />
-          <CardBody style={{ padding: 'var(--space-5)' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-              <input
-                type="month"
-                className="form-control"
-                style={{ width: 'auto' }}
-                value={verificationsMonth}
-                onChange={(e) => setVerificationsMonth(e.target.value)}
-              />
-            </div>
-            <DataTable
-              columns={[
-                { key: 'station', label: 'Station' },
-                { key: 'period', label: 'Period' },
-                { key: 'verifier', label: 'Completed By' },
-                { key: 'empId', label: 'Emp ID' },
-                { key: 'date', label: 'Date' },
-                { key: 'time', label: 'Time' }
-              ]}
-              data={verifications}
-              isLoading={loadingVerifications}
-              emptyTitle="No verifications found"
-              emptyDesc={`No digital stock verifications recorded for ${verificationsMonth}.`}
-            />
-          </CardBody>
-        </Card>
-      </div>
-
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <Card>
           <CardHeader title="All Stations Overview" icon={<Building2 size={16} />} />
           <CardBody style={{ padding: 'var(--space-5)' }}>
             {isLoading ? (
@@ -580,8 +549,39 @@ function ALSDashboard() {
             )}
           </CardBody>
         </Card>
-
       </div>
+
+      <div style={{ marginBottom: 'var(--space-6)' }}>
+        <Card>
+          <CardHeader title="Digital Stock Verifications Report" icon={<ClipboardList size={16} />} />
+          <CardBody style={{ padding: 'var(--space-5)' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+              <input
+                type="month"
+                className="form-control"
+                style={{ width: 'auto' }}
+                value={verificationsMonth}
+                onChange={(e) => setVerificationsMonth(e.target.value)}
+              />
+            </div>
+            <DataTable
+              columns={[
+                { key: 'station', label: 'Station' },
+                { key: 'period', label: 'Period' },
+                { key: 'verifier', label: 'Completed By' },
+                { key: 'empId', label: 'Emp ID' },
+                { key: 'date', label: 'Date' },
+                { key: 'time', label: 'Time' }
+              ]}
+              data={verifications}
+              isLoading={loadingVerifications}
+              emptyTitle="No verifications found"
+              emptyDesc={`No digital stock verifications recorded for ${verificationsMonth}.`}
+            />
+          </CardBody>
+        </Card>
+      </div>
+
 
       <Modal
         isOpen={!!selectedStationDetail}
