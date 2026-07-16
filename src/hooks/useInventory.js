@@ -66,7 +66,7 @@ export function useInventory(stationId) {
       .from('stock_received')
       .select(`
         *,
-        inventory_items ( name, unit ),
+        inventory_items ( name, unit, rate_master ( nos_per_kg ) ),
         users_profile ( full_name )
       `)
       .eq('station_id', sid)

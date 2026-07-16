@@ -12,7 +12,7 @@ import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
 import { supabase } from '../lib/supabase';
 import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
-import { toDisplayValue, getDisplayUnit, toBaseValue } from '../utils/units';
+import { toDisplayValue, getDisplayUnit, toBaseValue, toBillingQty } from '../utils/units';
 import { formatDate } from '../utils/dateHelpers';
 import toast from 'react-hot-toast';
 
@@ -93,7 +93,7 @@ export default function StockReceived() {
         const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
         let logsQuery = supabase.from('stock_received')
-          .select('*, inventory_items(name,unit), stations!inner(code,name), users_profile(full_name)')
+          .select('*, inventory_items(name,unit,rate_master(nos_per_kg)), stations!inner(code,name), users_profile(full_name)')
           .or('supplier.neq.Opening Stock Initialization,supplier.is.null')
           .gte('received_date', startDate)
           .lte('received_date', endDate)
@@ -394,8 +394,9 @@ export default function StockReceived() {
     { key: 'unit_rate', label: 'Unit Rate', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
     { key: 'total_value', label: 'Total Value', render: (_, row) => {
       if (!row.unit_rate) return '—';
-      const dispQty = toDisplayValue(row.quantity, row.inventory_items?.unit || 'Nos');
-      return `₹${(dispQty * row.unit_rate).toFixed(2)}`;
+      const nosPerKg = row.inventory_items?.rate_master?.nos_per_kg || null;
+      const billingQty = toBillingQty(row.quantity, row.inventory_items?.unit || 'Nos', nosPerKg);
+      return `₹${(billingQty * row.unit_rate).toFixed(2)}`;
     }},
     { key: 'source_station', label: 'Received From', render: (_, row) => {
         if (row.source_station_id) {
