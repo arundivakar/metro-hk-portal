@@ -641,7 +641,7 @@ export default function StockReceived() {
             <select className="form-control" value={depotForm.source_station_id}
               onChange={(e) => handleDepotStationChange(e.target.value)} required>
               <option value="">— Select Station —</option>
-              {stations.filter(s => s.id !== selectedStation?.id).map(s => (
+              {stations.map(s => (
                 <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
               ))}
             </select>
