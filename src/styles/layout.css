@@ -1,7 +1,8 @@
 /* ─── App Shell ──────────────────────────────────────────────────────────────── */
 .app-shell {
   display: flex;
-  height: 100vh;
+  height: 100vh;      /* fallback for browsers without dvh */
+  height: 100dvh;     /* dvh = dynamic viewport height: excludes mobile browser chrome */
   overflow: hidden;
   background: var(--content-bg);
 }
@@ -10,7 +11,8 @@
 .sidebar {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
-  height: 100vh;
+  height: 100vh;      /* fallback */
+  height: 100dvh;     /* dvh excludes mobile browser chrome */
   background: var(--sidebar-bg);
   display: flex;
   flex-direction: column;
@@ -175,6 +177,8 @@
 .sidebar-footer {
   border-top: 1px solid rgba(255,255,255,0.06);
   padding: var(--space-3) var(--space-3);
+  /* Add safe area inset so logout button clears iPhone home bar / Android nav bar */
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -452,6 +456,8 @@
     transform: translateX(-100%);
     width: var(--sidebar-width) !important;
     min-width: var(--sidebar-width) !important;
+    height: 100vh;      /* fallback */
+    height: 100dvh;     /* dynamic: excludes address bar height */
     transition: transform var(--transition-slow);
   }
   .sidebar.mobile-open {
