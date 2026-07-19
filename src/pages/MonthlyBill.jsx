@@ -51,9 +51,7 @@ export default function MonthlyBill() {
         .from('consumption_logs')
         .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg, tender_year)), stations(code)')
         .gte('consumption_date', startDate)
-        .lte('consumption_date', endDate)
-        .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
-        .not('remarks', 'ilike', 'Depot Transfer Out%');
+        .lte('consumption_date', endDate);
       const { data: logsData, error: logsErr } = await fetchAll(logsQuery);
       if (logsErr) throw logsErr;
       setConsumptionLogs(logsData || []);
@@ -109,6 +107,11 @@ export default function MonthlyBill() {
 
     // Accumulate raw base-unit consumption
     consumptionLogs.forEach(log => {
+      // Exclude transfer out logs (which are not real consumption)
+      if (log.remarks?.startsWith('Inter-Station Transfer Out') || log.remarks?.startsWith('Depot Transfer Out')) {
+        return;
+      }
+      
       const itemId = log.item_id;
       const stationCode = log.stations?.code;
       const qty = Number(log.quantity_used || 0);

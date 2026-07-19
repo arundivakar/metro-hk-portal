@@ -388,16 +388,17 @@ function ALSDashboard() {
       
       const allLogsQuery = supabase
         .from('consumption_logs')
-        .select('station_id, quantity_used, inventory_items(unit, rate_master(unit_rate, nos_per_kg, tender_year))')
-        .gte('consumption_date', monthStart)
-        .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
-        .not('remarks', 'ilike', 'Depot Transfer Out%');
+        .select('station_id, quantity_used, remarks, inventory_items(unit, rate_master(unit_rate, nos_per_kg, tender_year))')
+        .gte('consumption_date', monthStart);
         
       const { data: allLogs } = await fetchAll(allLogsQuery);
 
       const spendByStation = {};
       if (allLogs) {
         allLogs.forEach(r => {
+           if (r.remarks?.startsWith('Inter-Station Transfer Out') || r.remarks?.startsWith('Depot Transfer Out')) {
+             return;
+           }
            // Apply tender_year filter to match Approvals logic
            const tYearStr = r.inventory_items?.rate_master?.tender_year || '';
            if (tYearStr.toLowerCase().includes('before 2024')) return;
