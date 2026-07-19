@@ -9,7 +9,7 @@ import Alert from '../components/ui/Alert';
 import { RequestStatusBadge, PriorityBadge } from '../components/ui/Badge';
 import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
-import { supabase } from '../lib/supabase';
+import { supabase, fetchAll } from '../lib/supabase';
 import { ROLES, REQUEST_STATUS, APPROVAL_THRESHOLD, ALS_GROUPS } from '../lib/constants';
 import { toDisplayValue, toBillingQty } from '../utils/units';
 import { formatDate } from '../utils/dateHelpers';
@@ -39,7 +39,7 @@ export default function Approvals() {
   const loadExpenditure = async () => {
     try {
       const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
       let query = supabase.from('consumable_requests')
         .select(`quantity, unit_rate, status, stations (code), inventory_items (unit, rate_master (nos_per_kg))`)
@@ -47,14 +47,14 @@ export default function Approvals() {
         .neq('status', 'rejected');
 
       let consumptionQuery = supabase.from('consumption_logs')
-        .select(`quantity_used, stations (code), inventory_items (unit, rate_master (unit_rate, nos_per_kg, tender_year))`)
+        .select(`quantity_used, remarks, stations (code), inventory_items (unit, rate_master (unit_rate, nos_per_kg, tender_year))`)
         .gte('consumption_date', monthStart);
 
       if (role === ROLES.SC) {
         query = query.eq('station_id', selectedStation?.id);
       }
 
-      const [reqRes, consRes] = await Promise.all([query, consumptionQuery]);
+      const [reqRes, consRes] = await Promise.all([fetchAll(query), fetchAll(consumptionQuery)]);
       
       if (reqRes.error) throw reqRes.error;
       if (consRes.error) throw consRes.error;
@@ -83,6 +83,10 @@ export default function Approvals() {
       });
       
       validConsData.forEach(r => {
+        if (r.remarks?.startsWith('Inter-Station Transfer Out') || r.remarks?.startsWith('Depot Transfer Out')) {
+          return;
+        }
+        
         const tYearStr = r.inventory_items?.rate_master?.tender_year || '';
         if (tYearStr.toLowerCase().includes('before 2024')) return;
         const startYear = parseInt(tYearStr.split('-')[0]) || 0;

@@ -325,7 +325,7 @@ export default function StockMovement() {
     try {
       const [year, month] = selectedMonth.split('-');
       const startDate = `${year}-${month}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
       // Fresh fetch of ALL active items — explicit limit avoids Supabase row cap
       const { data: allItemsData, error: itemsErr } = await supabase
@@ -339,18 +339,21 @@ export default function StockMovement() {
       // Fetch all consumption logs for the selected month across all stations
       // Exclude inter-station transfer-out entries — those are stock movements, not actual consumption.
       // Billing should only reflect real usage at each station.
-      const { data, error } = await supabase
+      const query = supabase
         .from('consumption_logs')
         .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg, tender_year)), stations(code)')
         .gte('consumption_date', startDate)
-        .lte('consumption_date', endDate)
-        .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
-        .not('remarks', 'ilike', 'Depot Transfer Out%')
-        .limit(5000);
+        .lte('consumption_date', endDate);
 
+      const { data, error } = await fetchAll(query);
       if (error) throw error;
 
-      await generateMonthlyBillPdf(month, year, data || [], allItemsData || []);
+      // Filter in memory to avoid PostgreSQL NULL evaluation bug with `.not`
+      const validLogs = (data || []).filter(log => {
+        return !(log.remarks?.startsWith('Inter-Station Transfer Out') || log.remarks?.startsWith('Depot Transfer Out'));
+      });
+
+      await generateMonthlyBillPdf(month, year, validLogs, allItemsData || []);
       setShowBillModal(false);
       toast.success('Monthly Bill generated successfully!');
     } catch (err) {
