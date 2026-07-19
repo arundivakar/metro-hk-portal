@@ -4,7 +4,7 @@ import { Card, CardHeader } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
 import Button from '../components/ui/Button';
 import { useAuthStore } from '../store/authStore';
-import { supabase } from '../lib/supabase';
+import { supabase, fetchAll } from '../lib/supabase';
 import { ROLES, ALS_GROUPS } from '../lib/constants';
 import { generateMonthlyBillPdf, billingUnitLabel } from '../lib/pdfGenerator';
 import { toBillingQty } from '../utils/units';
@@ -34,7 +34,7 @@ export default function MonthlyBill() {
     try {
       const [year, month] = selectedMonth.split('-');
       const startDate = `${year}-${month}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
       // Fetch all active items
       const { data: itemsData, error: itemsErr } = await supabase
@@ -47,12 +47,14 @@ export default function MonthlyBill() {
       setAllItems(itemsData || []);
 
       // Fetch all consumption logs
-      const { data: logsData, error: logsErr } = await supabase
+      const logsQuery = supabase
         .from('consumption_logs')
         .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg, tender_year)), stations(code)')
         .gte('consumption_date', startDate)
         .lte('consumption_date', endDate)
-        .limit(5000);
+        .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
+        .not('remarks', 'ilike', 'Depot Transfer Out%');
+      const { data: logsData, error: logsErr } = await fetchAll(logsQuery);
       if (logsErr) throw logsErr;
       setConsumptionLogs(logsData || []);
     } catch (err) {

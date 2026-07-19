@@ -12,7 +12,7 @@ import { Badge, RequestStatusBadge } from '../components/ui/Badge';
 import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
-import { supabase } from '../lib/supabase';
+import { supabase, fetchAll } from '../lib/supabase';
 import { ROLES, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
@@ -384,11 +384,16 @@ function ALSDashboard() {
 
       // Fetch global consumption for the current month to show spend on station cards
       const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-      const { data: allLogs } = await supabase
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      
+      const allLogsQuery = supabase
         .from('consumption_logs')
         .select('station_id, quantity_used, inventory_items(unit, rate_master(unit_rate, nos_per_kg, tender_year))')
-        .gte('consumption_date', monthStart);
+        .gte('consumption_date', monthStart)
+        .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
+        .not('remarks', 'ilike', 'Depot Transfer Out%');
+        
+      const { data: allLogs } = await fetchAll(allLogsQuery);
 
       const spendByStation = {};
       if (allLogs) {

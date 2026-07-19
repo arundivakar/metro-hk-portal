@@ -412,6 +412,10 @@ export default function StockReceived() {
       key: 'actions', 
       label: 'Actions', 
       render: (_, row) => {
+        if (row.source_station_id) {
+          return <span style={{ fontSize: '0.78rem', color: 'var(--color-gray-400)', fontStyle: 'italic' }}>System record</span>;
+        }
+
         // Can only edit if ALS or if SC owns the log
         const canEdit = role === ROLES.ALS || (role === ROLES.SC && row.station_id === selectedStation?.id);
         if (!canEdit) return null;
@@ -591,7 +595,13 @@ export default function StockReceived() {
           </div>
           {selectedItem && form.quantity && form.unit_rate && (
             <Alert variant="info" style={{ marginBottom: 'var(--space-3)' }}>
-              Total Value: ₹{(parseFloat(form.quantity) * parseFloat(form.unit_rate)).toFixed(2)}
+            Total Value: ₹{(
+              toBillingQty(
+                toBaseValue(parseFloat(form.quantity), selectedItem.unit || 'Nos'), 
+                selectedItem.unit || 'Nos', 
+                selectedItem.rate_master?.nos_per_kg
+              ) * parseFloat(form.unit_rate)
+            ).toFixed(2)}
             </Alert>
           )}
           <div className="form-group">

@@ -486,4 +486,8 @@
   .topbar-menu-btn { display: flex; }
   .topbar        { padding: 0 var(--space-4); }
   .station-name-text { display: none; }
+
+  .sidebar-footer {
+    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 24px));
+  }
 }

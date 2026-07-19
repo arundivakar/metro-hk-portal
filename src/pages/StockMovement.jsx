@@ -10,7 +10,7 @@ import Alert from '../components/ui/Alert';
 import { useAuthStore } from '../store/authStore';
 import { useStationStore } from '../store/stationStore';
 import { useInventory } from '../hooks/useInventory';
-import { supabase } from '../lib/supabase';
+import { supabase, fetchAll } from '../lib/supabase';
 import { ROLES, ALS_GROUPS } from '../lib/constants';
 import { generateMonthlyBillPdf } from '../lib/pdfGenerator';
 import { formatDate } from '../utils/dateHelpers';
@@ -52,7 +52,7 @@ export default function StockMovement() {
 
   // Form States
   const [formQty, setFormQty] = useState('');
-  const [formDate, setFormDate] = useState(today.toISOString().split('T')[0]);
+  const [formDate, setFormDate] = useState(today.toLocaleDateString('en-CA'));
   const [formRemarks, setFormRemarks] = useState('');
 
   // Bill Generation
@@ -72,7 +72,7 @@ export default function StockMovement() {
 
       const [year, month] = selectedMonth.split('-');
       const startDate = `${year}-${month}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
       if (role === ROLES.SC && selectedStation?.id) {
         // Fetch current stock
@@ -109,7 +109,12 @@ export default function StockMovement() {
            consumedQuery = consumedQuery.in('stations.code', allowedStations);
         }
 
-        const [sRes, rRes, cRes] = await Promise.all([stockQuery, receivedQuery, consumedQuery]);
+        const [sRes, rRes, cRes] = await Promise.all([
+          fetchAll(stockQuery), 
+          fetchAll(receivedQuery), 
+          fetchAll(consumedQuery)
+        ]);
+        
         setCurrentStock(sRes.data ?? []);
         setReceivedLogs(rRes.data ?? []);
         setConsumptionLogs(cRes.data ?? []);
@@ -381,7 +386,7 @@ export default function StockMovement() {
       key: 'actions', label: 'Actions', render: (_, row) => (
         <Button variant="primary" size="sm" leftIcon={<Pencil size={14} />} onClick={() => {
           setSelectedItemForAction(row);
-          setFormQty(''); setFormRemarks(''); setFormDate(today.toISOString().split('T')[0]);
+          setFormQty(''); setFormRemarks(''); setFormDate(today.toLocaleDateString('en-CA'));
           setShowConsumptionForm(true);
         }}>
           Log Daily Consumption
