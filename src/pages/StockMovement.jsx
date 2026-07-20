@@ -552,7 +552,7 @@ export default function StockMovement() {
           </Alert>
           <div className="form-grid">
             <div className="form-group">
-              <label className="form-label form-label-required">Quantity Used</label>
+              <label className="form-label form-label-required">Quantity Used {selectedItemForAction?.unit ? `(${selectedItemForAction.unit})` : ''}</label>
               <input type="number" step="any" min="0.001" className="form-control" value={formQty} onChange={e => setFormQty(e.target.value)} required />
             </div>
             <div className="form-group">
