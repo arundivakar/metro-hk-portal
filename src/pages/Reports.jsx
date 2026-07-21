@@ -65,7 +65,7 @@ function StationSpendChart({ stationData, isLoading }) {
   );
 
   return (
-    <div style={{ overflowX: 'auto', position: 'relative', paddingBottom: 4 }}>
+    <div style={{ position: 'relative', paddingBottom: 4 }}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${chartW} ${CHART_H}`}
@@ -376,20 +376,20 @@ export default function Reports() {
         />
         <CardBody>
           {isALSorHKTL && <GroupLegend />}
-          <div style={{ marginTop: 8 }}>
-            <StationSpendChart stationData={stationSpend} isLoading={isLoadingChart} />
-          </div>
 
-          {/* Summary table below chart */}
-          {stationSpend.length > 0 && !isLoadingChart && (
-            <div style={{ marginTop: 16, overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          {/* Single shared scroll container — chart + table scroll together */}
+          <div style={{ overflowX: 'auto', marginTop: 8 }}>
+            <StationSpendChart stationData={stationSpend} isLoading={isLoadingChart} />
+
+            {/* Summary table aligned under chart columns */}
+            {stationSpend.length > 0 && !isLoadingChart && (
+              <table style={{ borderCollapse: 'collapse', fontSize: 12, marginTop: 8, width: '100%', minWidth: Math.max(stationSpend.length * 42 + 80, 360) }}>
                 <thead>
                   <tr style={{ background: 'var(--color-gray-50)' }}>
-                    <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)' }}>Station</th>
-                    {isALSorHKTL && <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)' }}>Group</th>}
-                    <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)' }}>Spend (₹)</th>
-                    <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)' }}>% of Total</th>
+                    <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Station</th>
+                    {isALSorHKTL && <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Group</th>}
+                    <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Spend (₹)</th>
+                    <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>% of Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -399,17 +399,17 @@ export default function Reports() {
                     const pct = totalSpend > 0 ? ((s.spend / totalSpend) * 100).toFixed(1) : '0.0';
                     return (
                       <tr key={s.code} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--color-gray-50)' }}>
-                        <td style={{ padding: '6px 12px', fontWeight: 700, color: colors.label }}>
+                        <td style={{ padding: '6px 12px', fontWeight: 700, color: colors.label, whiteSpace: 'nowrap' }}>
                           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colors.bar, marginRight: 6 }} />
                           {s.code}
                         </td>
                         {isALSorHKTL && (
-                          <td style={{ padding: '6px 12px', color: 'var(--color-gray-500)', fontSize: 11 }}>{group || '—'}</td>
+                          <td style={{ padding: '6px 12px', color: 'var(--color-gray-500)', fontSize: 11, whiteSpace: 'nowrap' }}>{group || '—'}</td>
                         )}
-                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--color-gray-800)' }}>
+                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--color-gray-800)', whiteSpace: 'nowrap' }}>
                           ₹{s.spend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)' }}>{pct}%</td>
+                        <td style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', whiteSpace: 'nowrap' }}>{pct}%</td>
                       </tr>
                     );
                   })}
@@ -417,15 +417,15 @@ export default function Reports() {
                 <tfoot>
                   <tr style={{ borderTop: '2px solid var(--color-gray-300)' }}>
                     <td colSpan={isALSorHKTL ? 2 : 1} style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--color-gray-800)' }}>TOTAL</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--color-success-700)' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--color-success-700)', whiteSpace: 'nowrap' }}>
                       ₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--color-gray-400)' }}>100%</td>
                   </tr>
                 </tfoot>
               </table>
-            </div>
-          )}
+            )}
+          </div>
         </CardBody>
       </Card>
 
