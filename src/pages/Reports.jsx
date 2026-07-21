@@ -346,88 +346,96 @@ export default function Reports() {
   return (
     <Layout
       title="Reports"
-      subtitle={isALSorHKTL ? 'System-wide analytics' : selectedStation?.name}
+      subtitle={role === ROLES.ALS ? 'System-wide analytics' : selectedStation?.name}
     >
-      {/* ── Station Spend Chart ───────────────────────────────────────────── */}
-      <Card style={{ marginBottom: 'var(--space-6)' }}>
-        <CardHeader
-          title="Station-wise Monthly Spend"
-          icon={<IndianRupee size={16} style={{ color: 'var(--color-success-500)' }} />}
-          subtitle={`Total: ₹${totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          actions={
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-gray-600)' }}>Month:</label>
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
-                style={{
-                  border: '1px solid var(--color-gray-300)',
-                  borderRadius: 6,
-                  padding: '4px 8px',
-                  fontSize: 13,
-                  background: 'var(--color-bg-primary)',
-                  color: 'var(--color-gray-800)',
-                  cursor: 'pointer',
-                }}
-              />
-            </div>
-          }
-        />
-        <CardBody>
-          {isALSorHKTL && <GroupLegend />}
+      {/* ── Station Spend Chart (ALS only) ──────────────────────────────── */}
+      {role === ROLES.ALS && (
+        <Card style={{ marginBottom: 'var(--space-6)' }}>
+          <CardHeader
+            title="Station-wise Monthly Spend"
+            icon={<IndianRupee size={16} style={{ color: 'var(--color-success-500)' }} />}
+            subtitle={`Total: ₹${totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            actions={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-gray-600)' }}>Month:</label>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={e => setSelectedMonth(e.target.value)}
+                  style={{
+                    border: '1px solid var(--color-gray-300)',
+                    borderRadius: 6,
+                    padding: '4px 8px',
+                    fontSize: 13,
+                    background: 'var(--color-bg-primary)',
+                    color: 'var(--color-gray-800)',
+                    cursor: 'pointer',
+                  }}
+                />
+              </div>
+            }
+          />
+          <CardBody>
+            <GroupLegend />
 
-          {/* Single shared scroll container — chart + table scroll together */}
-          <div style={{ overflowX: 'auto', marginTop: 8 }}>
-            <StationSpendChart stationData={stationSpend} isLoading={isLoadingChart} />
+            {/* Single shared scroll wrapper — chart + table move together */}
+            {(() => {
+              // Both SVG and table use this same computed width so they align
+              const sharedW = Math.max(64 + stationSpend.length * 42 + 16, 480);
+              return (
+                <div style={{ overflowX: 'auto', marginTop: 8 }}>
+                  {/* SVG pinned to sharedW so the scroll container knows its extent */}
+                  <div style={{ width: sharedW, minWidth: sharedW }}>
+                    <StationSpendChart stationData={stationSpend} isLoading={isLoadingChart} />
+                  </div>
 
-            {/* Summary table aligned under chart columns */}
-            {stationSpend.length > 0 && !isLoadingChart && (
-              <table style={{ borderCollapse: 'collapse', fontSize: 12, marginTop: 8, width: '100%', minWidth: Math.max(stationSpend.length * 42 + 80, 360) }}>
-                <thead>
-                  <tr style={{ background: 'var(--color-gray-50)' }}>
-                    <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Station</th>
-                    {isALSorHKTL && <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Group</th>}
-                    <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Spend (₹)</th>
-                    <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>% of Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stationSpend.map((s, i) => {
-                    const group = getGroupForStation(s.code);
-                    const colors = group ? GROUP_COLORS[group] : DEFAULT_COLOR;
-                    const pct = totalSpend > 0 ? ((s.spend / totalSpend) * 100).toFixed(1) : '0.0';
-                    return (
-                      <tr key={s.code} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--color-gray-50)' }}>
-                        <td style={{ padding: '6px 12px', fontWeight: 700, color: colors.label, whiteSpace: 'nowrap' }}>
-                          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colors.bar, marginRight: 6 }} />
-                          {s.code}
-                        </td>
-                        {isALSorHKTL && (
-                          <td style={{ padding: '6px 12px', color: 'var(--color-gray-500)', fontSize: 11, whiteSpace: 'nowrap' }}>{group || '—'}</td>
-                        )}
-                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--color-gray-800)', whiteSpace: 'nowrap' }}>
-                          ₹{s.spend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', whiteSpace: 'nowrap' }}>{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr style={{ borderTop: '2px solid var(--color-gray-300)' }}>
-                    <td colSpan={isALSorHKTL ? 2 : 1} style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--color-gray-800)' }}>TOTAL</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--color-success-700)', whiteSpace: 'nowrap' }}>
-                      ₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--color-gray-400)' }}>100%</td>
-                  </tr>
-                </tfoot>
-              </table>
-            )}
-          </div>
-        </CardBody>
-      </Card>
+                  {stationSpend.length > 0 && !isLoadingChart && (
+                    <table style={{ borderCollapse: 'collapse', fontSize: 12, marginTop: 8, width: sharedW, minWidth: sharedW }}>
+                      <thead>
+                        <tr style={{ background: 'var(--color-gray-50)' }}>
+                          <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Station</th>
+                          <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Group</th>
+                          <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Spend (₹)</th>
+                          <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>% of Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stationSpend.map((s, i) => {
+                          const group = getGroupForStation(s.code);
+                          const colors = group ? GROUP_COLORS[group] : DEFAULT_COLOR;
+                          const pct = totalSpend > 0 ? ((s.spend / totalSpend) * 100).toFixed(1) : '0.0';
+                          return (
+                            <tr key={s.code} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--color-gray-50)' }}>
+                              <td style={{ padding: '6px 12px', fontWeight: 700, color: colors.label, whiteSpace: 'nowrap' }}>
+                                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colors.bar, marginRight: 6 }} />
+                                {s.code}
+                              </td>
+                              <td style={{ padding: '6px 12px', color: 'var(--color-gray-500)', fontSize: 11, whiteSpace: 'nowrap' }}>{group || '—'}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--color-gray-800)', whiteSpace: 'nowrap' }}>
+                                ₹{s.spend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', whiteSpace: 'nowrap' }}>{pct}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ borderTop: '2px solid var(--color-gray-300)' }}>
+                          <td colSpan={2} style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--color-gray-800)' }}>TOTAL</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--color-success-700)', whiteSpace: 'nowrap' }}>
+                            ₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--color-gray-400)' }}>100%</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  )}
+                </div>
+              );
+            })()}
+          </CardBody>
+        </Card>
+      )}
 
       {/* ── Damaged Items ─────────────────────────────────────────────────── */}
       <Card>
