@@ -25,24 +25,25 @@ function getGroupForStation(code) {
   return null;
 }
 
-// ─── Horizontal SVG Bar Chart ─────────────────────────────────────────────────
+// ─── Vertical Column Chart ────────────────────────────────────────────────────
 function StationSpendChart({ stationData, isLoading }) {
   const [tooltip, setTooltip] = useState(null);
   const svgRef = useRef(null);
 
-  const ROW_H = 36;
-  const LABEL_W = 60;
-  const PADDING = { top: 16, right: 80, bottom: 32, left: LABEL_W };
-  const chartW = 700;
-  const chartH = stationData.length * ROW_H + PADDING.top + PADDING.bottom;
-  const innerW = chartW - PADDING.left - PADDING.right;
+  const COL_W = 42;          // width per column (bar + gap)
+  const BAR_W = 28;          // actual bar width
+  const CHART_H = 320;       // total SVG height
+  const PADDING = { top: 24, right: 16, bottom: 64, left: 64 };
+  const innerH = CHART_H - PADDING.top - PADDING.bottom;
+
+  const chartW = PADDING.left + stationData.length * COL_W + PADDING.right;
 
   const maxSpend = useMemo(() => Math.max(...stationData.map(s => s.spend), 1), [stationData]);
 
   if (isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--color-gray-400)', gap: 8 }}>
-        <div className="spinner" style={{ width: 20, height: 20, border: '2px solid var(--color-gray-200)', borderTopColor: 'var(--color-primary-500)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ width: 20, height: 20, border: '2px solid var(--color-gray-200)', borderTopColor: 'var(--color-primary-500)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         Loading chart data…
       </div>
     );
@@ -57,70 +58,103 @@ function StationSpendChart({ stationData, isLoading }) {
     );
   }
 
-  // Tick marks
+  // Y-axis ticks
   const tickCount = 5;
-  const ticks = Array.from({ length: tickCount + 1 }, (_, i) => Math.round((maxSpend / tickCount) * i));
+  const ticks = Array.from({ length: tickCount + 1 }, (_, i) =>
+    Math.round((maxSpend / tickCount) * i)
+  );
 
   return (
-    <div style={{ overflowX: 'auto', position: 'relative' }}>
+    <div style={{ overflowX: 'auto', position: 'relative', paddingBottom: 4 }}>
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${chartW} ${chartH}`}
-        style={{ width: '100%', maxWidth: chartW, display: 'block', fontFamily: 'var(--font-family-base)' }}
+        viewBox={`0 0 ${chartW} ${CHART_H}`}
+        style={{ width: Math.max(chartW, 360), height: CHART_H, display: 'block', fontFamily: 'var(--font-family-base)' }}
         onMouseLeave={() => setTooltip(null)}
       >
-        {/* Grid lines */}
+        {/* Y-axis grid lines + labels */}
         {ticks.map((tick) => {
-          const x = PADDING.left + (tick / maxSpend) * innerW;
+          const y = PADDING.top + innerH - (tick / maxSpend) * innerH;
           return (
             <g key={tick}>
-              <line x1={x} y1={PADDING.top} x2={x} y2={chartH - PADDING.bottom} stroke="var(--color-gray-200)" strokeWidth={1} strokeDasharray={tick === 0 ? '0' : '3,3'} />
-              <text x={x} y={chartH - PADDING.bottom + 14} textAnchor="middle" fontSize={10} fill="var(--color-gray-400)">
+              <line
+                x1={PADDING.left} y1={y}
+                x2={chartW - PADDING.right} y2={y}
+                stroke={tick === 0 ? 'var(--color-gray-400)' : 'var(--color-gray-200)'}
+                strokeWidth={tick === 0 ? 1.5 : 1}
+                strokeDasharray={tick === 0 ? '0' : '4,3'}
+              />
+              <text x={PADDING.left - 6} y={y + 4} textAnchor="end" fontSize={10} fill="var(--color-gray-400)">
                 {tick >= 1000 ? `₹${(tick / 1000).toFixed(1)}k` : `₹${tick}`}
               </text>
             </g>
           );
         })}
 
-        {/* Bars */}
+        {/* X-axis baseline */}
+        <line
+          x1={PADDING.left} y1={PADDING.top + innerH}
+          x2={chartW - PADDING.right} y2={PADDING.top + innerH}
+          stroke="var(--color-gray-400)" strokeWidth={1.5}
+        />
+
+        {/* Columns */}
         {stationData.map((s, i) => {
           const group = getGroupForStation(s.code);
           const colors = group ? GROUP_COLORS[group] : DEFAULT_COLOR;
-          const barW = Math.max((s.spend / maxSpend) * innerW, s.spend > 0 ? 2 : 0);
-          const y = PADDING.top + i * ROW_H;
-          const barY = y + ROW_H * 0.2;
-          const barH = ROW_H * 0.6;
+          const barH = s.spend > 0 ? Math.max((s.spend / maxSpend) * innerH, 3) : 0;
+          const x = PADDING.left + i * COL_W + (COL_W - BAR_W) / 2;
+          const barY = PADDING.top + innerH - barH;
+          const labelY = PADDING.top + innerH + 14;
 
           return (
-            <g key={s.code}
+            <g
+              key={s.code}
               onMouseEnter={(e) => setTooltip({ code: s.code, spend: s.spend, group, x: e.clientX, y: e.clientY })}
               onMouseMove={(e) => setTooltip(t => ({ ...t, x: e.clientX, y: e.clientY }))}
               style={{ cursor: 'pointer' }}
             >
-              {/* Row background on hover handled via opacity */}
-              <rect x={0} y={y} width={chartW} height={ROW_H} fill="transparent" />
+              {/* Column background track */}
+              <rect
+                x={x} y={PADDING.top}
+                width={BAR_W} height={innerH}
+                rx={4} fill={colors.bg}
+              />
 
-              {/* Station label */}
-              <text x={PADDING.left - 8} y={barY + barH / 2 + 4} textAnchor="end" fontSize={11} fontWeight={600} fill={colors.label}>
+              {/* Value bar */}
+              {barH > 0 && (
+                <rect
+                  x={x} y={barY}
+                  width={BAR_W} height={barH}
+                  rx={4} fill={colors.bar}
+                  style={{ transition: 'height 0.4s ease, y 0.4s ease' }}
+                />
+              )}
+
+              {/* Station code label — angled 45° for readability */}
+              <text
+                x={x + BAR_W / 2}
+                y={labelY}
+                textAnchor="end"
+                fontSize={10}
+                fontWeight={700}
+                fill={colors.label}
+                transform={`rotate(-45, ${x + BAR_W / 2}, ${labelY})`}
+              >
                 {s.code}
               </text>
 
-              {/* Bar background track */}
-              <rect x={PADDING.left} y={barY} width={innerW} height={barH} rx={4} fill={colors.bg} />
-
-              {/* Value bar */}
-              <rect x={PADDING.left} y={barY} width={barW} height={barH} rx={4} fill={colors.bar} style={{ transition: 'width 0.4s ease' }} />
-
-              {/* Amount label at end of bar */}
-              {s.spend > 0 && (
+              {/* Spend value on top of bar */}
+              {s.spend > 0 && barH > 18 && (
                 <text
-                  x={PADDING.left + barW + 6}
-                  y={barY + barH / 2 + 4}
-                  fontSize={10}
+                  x={x + BAR_W / 2}
+                  y={barY - 4}
+                  textAnchor="middle"
+                  fontSize={9}
                   fontWeight={700}
                   fill={colors.label}
                 >
-                  ₹{s.spend.toFixed(0)}
+                  {s.spend >= 1000 ? `₹${(s.spend / 1000).toFixed(1)}k` : `₹${s.spend.toFixed(0)}`}
                 </text>
               )}
             </g>
@@ -133,7 +167,7 @@ function StationSpendChart({ stationData, isLoading }) {
         <div style={{
           position: 'fixed',
           left: tooltip.x + 14,
-          top: tooltip.y - 40,
+          top: tooltip.y - 50,
           background: 'var(--color-gray-900)',
           color: '#fff',
           borderRadius: 8,
