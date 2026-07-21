@@ -120,16 +120,16 @@ export default function Approvals() {
         .order('created_at', { ascending: false });
 
       if (role === ROLES.SC) {
-        // SC sees forwarded_sc requests for their station
+        // SC sees forwarded_sc requests (to action) and approved_sc (to mark Complete)
         query = query
           .eq('station_id', selectedStation?.id)
-          .in('status', [REQUEST_STATUS.FORWARDED_SC]);
+          .in('status', [REQUEST_STATUS.FORWARDED_SC, REQUEST_STATUS.APPROVED_SC]);
       } else if (role === ROLES.HKTL) {
-        // HKTL sees pending requests globally
-        query = query.in('status', [REQUEST_STATUS.PENDING]);
+        // HKTL sees pending requests globally and approved_sc requests to mark Complete
+        query = query.in('status', [REQUEST_STATUS.PENDING, REQUEST_STATUS.APPROVED_SC]);
       } else if (role === ROLES.ALS) {
-        // ALS sees forwarded requests
-        query = query.in('status', [REQUEST_STATUS.FORWARDED_ALS]);
+        // ALS sees forwarded requests (to action) and approved_als (to mark Complete)
+        query = query.in('status', [REQUEST_STATUS.FORWARDED_ALS, REQUEST_STATUS.APPROVED_ALS]);
         
         // Apply ALS Group Filter
         const allowedStations = ALS_GROUPS[alsGroupFilter];

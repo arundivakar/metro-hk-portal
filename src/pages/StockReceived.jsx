@@ -150,6 +150,12 @@ export default function StockReceived() {
     const isTransfer = !!form.source_station_id;
     const baseQty = toBaseValue(parseFloat(form.quantity), selectedItem?.unit || 'Nos');
 
+    // Guard: quantity must be a positive number
+    if (!form.quantity || parseFloat(form.quantity) <= 0 || isNaN(parseFloat(form.quantity))) {
+      setError('Quantity must be a positive number greater than zero.');
+      return;
+    }
+
     // Validate stock availability for inter-station transfer
     if (isTransfer) {
       const srcAvail = stationStockMap[form.source_station_id] || 0;
