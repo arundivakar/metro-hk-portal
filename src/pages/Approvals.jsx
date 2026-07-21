@@ -120,16 +120,16 @@ export default function Approvals() {
         .order('created_at', { ascending: false });
 
       if (role === ROLES.SC) {
-        // SC sees forwarded_sc requests (to action) and approved_sc (to mark Complete)
+        // SC sees forwarded_sc requests for their station only
         query = query
           .eq('station_id', selectedStation?.id)
-          .in('status', [REQUEST_STATUS.FORWARDED_SC, REQUEST_STATUS.APPROVED_SC]);
+          .in('status', [REQUEST_STATUS.FORWARDED_SC]);
       } else if (role === ROLES.HKTL) {
-        // HKTL sees pending requests globally and approved_sc requests to mark Complete
-        query = query.in('status', [REQUEST_STATUS.PENDING, REQUEST_STATUS.APPROVED_SC]);
+        // HKTL sees pending requests globally
+        query = query.in('status', [REQUEST_STATUS.PENDING]);
       } else if (role === ROLES.ALS) {
-        // ALS sees forwarded requests (to action) and approved_als (to mark Complete)
-        query = query.in('status', [REQUEST_STATUS.FORWARDED_ALS, REQUEST_STATUS.APPROVED_ALS]);
+        // ALS sees forwarded_als requests (documentation/approval only — no stock deduction)
+        query = query.in('status', [REQUEST_STATUS.FORWARDED_ALS]);
         
         // Apply ALS Group Filter
         const allowedStations = ALS_GROUPS[alsGroupFilter];
@@ -376,12 +376,7 @@ export default function Approvals() {
               <p><strong>Station:</strong> {selected.stations?.code}</p>
               {selected.reason && <p><strong>Reason:</strong> {selected.reason}</p>}
             </div>
-            {action === 'completed' && (
-              <Alert variant="warning" style={{ marginBottom: 'var(--space-4)' }}>
-                Marking as completed will deduct {selected.quantity} {selected.inventory_items?.unit} from station inventory.
-              </Alert>
-            )}
-            
+
             {/* SC Physical Verification Checklist */}
             {role === ROLES.SC && (action === 'approved' || action === 'forwarded') && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3)', background: 'var(--color-primary-50)', border: '1px solid var(--color-primary-200)', borderRadius: 'var(--radius-md)', cursor: 'pointer', marginBottom: 'var(--space-4)' }}>
