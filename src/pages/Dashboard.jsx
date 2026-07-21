@@ -63,14 +63,12 @@ function StationDashboard({ station }) {
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
-      const [received, consumed, requests, recentStock, recentConsumption, zeroStock] = await Promise.all([
+      const [received, consumedRes, requests, recentStock, recentConsumption, zeroStock] = await Promise.all([
         supabase.from('stock_received').select('received_date', { count: 'exact' })
           .eq('station_id', sid).gte('received_date', monthStart)
           .or('supplier.neq.Opening Stock Initialization,supplier.is.null'),
-        supabase.from('consumption_logs').select('consumption_date', { count: 'exact' })
-          .eq('station_id', sid).gte('consumption_date', monthStart)
-          .not('remarks', 'ilike', 'Inter-Station Transfer Out%')
-          .not('remarks', 'ilike', 'Depot Transfer Out%'),
+        supabase.from('consumption_logs').select('remarks', { count: 'exact', head: false })
+          .eq('station_id', sid).gte('consumption_date', monthStart),
         supabase.from('consumable_requests').select('id', { count: 'exact' })
           .eq('station_id', sid).in('status', ['pending', 'forwarded_als']),
         supabase.from('stock_received').select('id, quantity, received_date, created_at, inventory_items(name,unit)')
@@ -81,6 +79,11 @@ function StationDashboard({ station }) {
         supabase.from('station_inventory').select('id', { count: 'exact' })
           .eq('station_id', sid).lte('current_stock', 0),
       ]);
+
+      // Count real consumptions in JS to avoid Postgres NULL filtering bug with .not()
+      const consumedCount = (consumedRes.data ?? []).filter(r =>
+        !r.remarks?.startsWith('Inter-Station Transfer Out') && !r.remarks?.startsWith('Depot Transfer Out')
+      ).length;
 
       // Merge and sort recent transactions by date then created_at
       const txs = [
@@ -116,7 +119,7 @@ function StationDashboard({ station }) {
 
       setStats({
         receivedCount: received.count ?? 0,
-        consumedCount: consumed.count ?? 0,
+        consumedCount,
         zeroStockCount: zeroStock.count ?? 0,
         todayIn,
         todayOut,
