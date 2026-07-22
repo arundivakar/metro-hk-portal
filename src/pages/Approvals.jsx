@@ -220,6 +220,14 @@ export default function Approvals() {
     { key: 'requested_by', label: 'Requested By', render: (_, r) => r.users_profile?.full_name ?? r.users_profile?.employee_id ?? '—' },
     { key: 'item', label: 'Item', render: (_, r) => r.inventory_items?.name ?? '—' },
     { key: 'quantity', label: 'Qty', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
+    { key: 'prev_date', label: 'Prev. Taken', render: (_, r) => {
+      const match = r.reason?.match(/^\[Previously Taken:\s*([^\]]+)\]/);
+      return match ? (
+        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--color-primary-700)' }}>
+          {formatDate(match[1])}
+        </span>
+      ) : '—';
+    } },
     {
       key: 'estimated_cost', label: 'Est. Cost',
       render: (v) => v ? (
@@ -374,7 +382,18 @@ export default function Approvals() {
               <p><strong>Quantity:</strong> {selected.quantity} {selected.inventory_items?.unit}</p>
               <p><strong>Estimated Cost:</strong> ₹{Number(selected.estimated_cost ?? 0).toFixed(2)}</p>
               <p><strong>Station:</strong> {selected.stations?.code}</p>
-              {selected.reason && <p><strong>Reason:</strong> {selected.reason}</p>}
+              {(() => {
+                const match = selected.reason?.match(/^\[Previously Taken:\s*([^\]]+)\]\s*(.*)/);
+                if (match) {
+                  return (
+                    <>
+                      <p><strong>Date Previously Taken:</strong> <span style={{ color: 'var(--color-primary-700)', fontWeight: 600 }}>{formatDate(match[1])}</span></p>
+                      {match[2] && <p><strong>Reason:</strong> {match[2]}</p>}
+                    </>
+                  );
+                }
+                return selected.reason ? <p><strong>Reason:</strong> {selected.reason}</p> : null;
+              })()}
             </div>
 
             {/* SC Physical Verification Checklist */}

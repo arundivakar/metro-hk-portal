@@ -32,8 +32,10 @@ export default function Requests() {
   const [statusFilter, setStatusFilter] = useState('All');
 
   const [form, setForm] = useState({
-    item_id: '', quantity: '', priority: PRIORITY.NORMAL, reason: '',
+    item_id: '', quantity: '', priority: PRIORITY.NORMAL, reason: '', previous_taken_date: '',
   });
+  const [lastDetectedDate, setLastDetectedDate] = useState('');
+  const [isFetchingLastDate, setIsFetchingLastDate] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
@@ -94,6 +96,48 @@ export default function Requests() {
   const selectedItemStock = inventory.find(i => i.item_id === form.item_id)?.current_stock || 0;
   const isOutOfStock = form.item_id && selectedItemStock <= 0;
 
+  const handleItemSelect = async (itemId) => {
+    setForm((f) => ({ ...f, item_id: itemId, previous_taken_date: '' }));
+    setLastDetectedDate('');
+    if (!itemId || !selectedStation?.id) return;
+
+    setIsFetchingLastDate(true);
+    try {
+      const { data: consData } = await supabase
+        .from('consumption_logs')
+        .select('consumption_date')
+        .eq('station_id', selectedStation.id)
+        .eq('item_id', itemId)
+        .order('consumption_date', { ascending: false })
+        .limit(1);
+
+      let lastDate = consData && consData.length > 0 ? consData[0].consumption_date : null;
+
+      if (!lastDate) {
+        const { data: reqData } = await supabase
+          .from('consumable_requests')
+          .select('created_at')
+          .eq('station_id', selectedStation.id)
+          .eq('item_id', itemId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (reqData && reqData.length > 0) {
+          lastDate = reqData[0].created_at.split('T')[0];
+        }
+      }
+
+      if (lastDate) {
+        setLastDetectedDate(lastDate);
+        setForm((f) => ({ ...f, previous_taken_date: lastDate }));
+      }
+    } catch (err) {
+      console.error('Error fetching last taken date:', err);
+    } finally {
+      setIsFetchingLastDate(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isOutOfStock) return;
@@ -124,6 +168,11 @@ export default function Requests() {
         }
       }
 
+      let finalReason = form.reason ? form.reason.trim() : '';
+      if (form.previous_taken_date) {
+        finalReason = `[Previously Taken: ${form.previous_taken_date}] ${finalReason}`.trim();
+      }
+
       const { error: err } = await supabase.from('consumable_requests').insert({
         station_id: selectedStation.id,
         item_id: form.item_id,
@@ -131,7 +180,7 @@ export default function Requests() {
         quantity: parseFloat(form.quantity),
         unit_rate: unitRate,
         priority: form.priority,
-        reason: form.reason || null,
+        reason: finalReason || null,
         image_url: imageUrl,
       });
       if (err) throw err;
@@ -139,7 +188,8 @@ export default function Requests() {
         'Request created and sent to HKTL for review!'
       );
       setShowForm(false);
-      setForm({ item_id: '', quantity: '', priority: PRIORITY.NORMAL, reason: '' });
+      setForm({ item_id: '', quantity: '', priority: PRIORITY.NORMAL, reason: '', previous_taken_date: '' });
+      setLastDetectedDate('');
       setImageFile(null);
       setImagePreview(null);
       loadData();
@@ -176,6 +226,14 @@ export default function Requests() {
       </a>
     ) : <span style={{ color: 'var(--text-muted)' }}>—</span> },
     { key: 'quantity', label: 'Qty', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
+    { key: 'prev_date', label: 'Prev. Taken', render: (_, r) => {
+      const match = r.reason?.match(/^\[Previously Taken:\s*([^\]]+)\]/);
+      return match ? (
+        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 500, color: 'var(--color-primary-700)' }}>
+          {formatDate(match[1])}
+        </span>
+      ) : '—';
+    } },
     { key: 'estimated_cost', label: 'Est. Cost', render: (v) => v ? `₹${Number(v).toFixed(2)}` : '—' },
     { key: 'priority', label: 'Priority', render: (v) => <PriorityBadge priority={v} /> },
     { key: 'status', label: 'Status', render: (v) => <RequestStatusBadge status={v} /> },
@@ -247,7 +305,7 @@ export default function Requests() {
           <div className="form-group">
             <label className="form-label form-label-required" htmlFor="req-item">Item</label>
             <select id="req-item" className="form-control" value={form.item_id}
-              onChange={(e) => setForm((f) => ({ ...f, item_id: e.target.value }))} required>
+              onChange={(e) => handleItemSelect(e.target.value)} required>
               <option value="">— Select item —</option>
               {items
                 .filter(i => {
@@ -261,6 +319,29 @@ export default function Requests() {
               ))}
             </select>
           </div>
+
+          {selectedItem && (
+            <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+              <label className="form-label" htmlFor="req-prev-date">Date Previously Taken (Optional)</label>
+              <input
+                id="req-prev-date"
+                type="date"
+                className="form-control"
+                value={form.previous_taken_date}
+                onChange={(e) => setForm((f) => ({ ...f, previous_taken_date: e.target.value }))}
+              />
+              {isFetchingLastDate && (
+                <small style={{ color: 'var(--color-gray-500)', display: 'block', marginTop: 4 }}>
+                  Checking last issued date…
+                </small>
+              )}
+              {lastDetectedDate && !isFetchingLastDate && (
+                <small style={{ color: 'var(--color-success-600)', display: 'block', marginTop: 4 }}>
+                  💡 Auto-detected last issued date: <strong>{formatDate(lastDetectedDate)}</strong>
+                </small>
+              )}
+            </div>
+          )}
           <div className="form-grid">
             <div className="form-group">
               <label className="form-label form-label-required" htmlFor="req-qty">Quantity</label>
