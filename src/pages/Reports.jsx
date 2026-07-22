@@ -65,11 +65,12 @@ function StationSpendChart({ stationData, isLoading }) {
   );
 
   return (
-    <div style={{ position: 'relative', paddingBottom: 4 }}>
+    <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${chartW} ${CHART_H}`}
-        style={{ width: Math.max(chartW, 360), height: CHART_H, display: 'block', fontFamily: 'var(--font-family-base)' }}
+        width={chartW}
+        height={CHART_H}
+        style={{ display: 'block', fontFamily: 'var(--font-family-base)', minWidth: chartW }}
         onMouseLeave={() => setTooltip(null)}
       >
         {/* Y-axis grid lines + labels */}
@@ -380,55 +381,58 @@ export default function Reports() {
 
             {/* Single shared scroll wrapper — chart + table move together */}
             {(() => {
-              // Both SVG and table use this same computed width so they align
               const sharedW = Math.max(64 + stationSpend.length * 42 + 16, 480);
               return (
-                <div style={{ overflowX: 'auto', marginTop: 8 }}>
-                  {/* SVG pinned to sharedW so the scroll container knows its extent */}
+                // Single horizontal scroll wraps both chart and table
+                <div style={{ overflowX: 'auto', marginTop: 8, paddingBottom: 8 }}>
+                  {/* SVG wrapper — explicit pixel width forces scroll container to expand */}
                   <div style={{ width: sharedW, minWidth: sharedW }}>
                     <StationSpendChart stationData={stationSpend} isLoading={isLoadingChart} />
                   </div>
 
                   {stationSpend.length > 0 && !isLoadingChart && (
-                    <table style={{ borderCollapse: 'collapse', fontSize: 12, marginTop: 8, width: sharedW, minWidth: sharedW }}>
-                      <thead>
-                        <tr style={{ background: 'var(--color-gray-50)' }}>
-                          <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Station</th>
-                          <th style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Group</th>
-                          <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>Spend (₹)</th>
-                          <th style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 600, borderBottom: '1px solid var(--color-gray-200)', whiteSpace: 'nowrap' }}>% of Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {stationSpend.map((s, i) => {
-                          const group = getGroupForStation(s.code);
-                          const colors = group ? GROUP_COLORS[group] : DEFAULT_COLOR;
-                          const pct = totalSpend > 0 ? ((s.spend / totalSpend) * 100).toFixed(1) : '0.0';
-                          return (
-                            <tr key={s.code} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--color-gray-50)' }}>
-                              <td style={{ padding: '6px 12px', fontWeight: 700, color: colors.label, whiteSpace: 'nowrap' }}>
-                                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colors.bar, marginRight: 6 }} />
-                                {s.code}
-                              </td>
-                              <td style={{ padding: '6px 12px', color: 'var(--color-gray-500)', fontSize: 11, whiteSpace: 'nowrap' }}>{group || '—'}</td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--color-gray-800)', whiteSpace: 'nowrap' }}>
-                                ₹{s.spend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--color-gray-500)', whiteSpace: 'nowrap' }}>{pct}%</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr style={{ borderTop: '2px solid var(--color-gray-300)' }}>
-                          <td colSpan={2} style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--color-gray-800)' }}>TOTAL</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--color-success-700)', whiteSpace: 'nowrap' }}>
-                            ₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--color-gray-400)' }}>100%</td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                    // Table is separately vertically scrollable with sticky header
+                    <div style={{ width: sharedW, minWidth: sharedW, marginTop: 8, maxHeight: 280, overflowY: 'auto', border: '1px solid var(--color-gray-200)', borderRadius: 8 }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--color-gray-100)', position: 'sticky', top: 0, zIndex: 2 }}>
+                            <th style={{ padding: '7px 14px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 700, borderBottom: '2px solid var(--color-gray-200)', whiteSpace: 'nowrap', background: 'var(--color-gray-100)' }}>Station</th>
+                            <th style={{ padding: '7px 14px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 700, borderBottom: '2px solid var(--color-gray-200)', whiteSpace: 'nowrap', background: 'var(--color-gray-100)' }}>Group</th>
+                            <th style={{ padding: '7px 14px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 700, borderBottom: '2px solid var(--color-gray-200)', whiteSpace: 'nowrap', background: 'var(--color-gray-100)' }}>Spend (₹)</th>
+                            <th style={{ padding: '7px 14px', textAlign: 'right', color: 'var(--color-gray-500)', fontWeight: 700, borderBottom: '2px solid var(--color-gray-200)', whiteSpace: 'nowrap', background: 'var(--color-gray-100)' }}>% of Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stationSpend.map((s, i) => {
+                            const group = getGroupForStation(s.code);
+                            const colors = group ? GROUP_COLORS[group] : DEFAULT_COLOR;
+                            const pct = totalSpend > 0 ? ((s.spend / totalSpend) * 100).toFixed(1) : '0.0';
+                            return (
+                              <tr key={s.code} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--color-gray-50)' }}>
+                                <td style={{ padding: '6px 14px', fontWeight: 700, color: colors.label, whiteSpace: 'nowrap' }}>
+                                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colors.bar, marginRight: 6 }} />
+                                  {s.code}
+                                </td>
+                                <td style={{ padding: '6px 14px', color: 'var(--color-gray-500)', fontSize: 11, whiteSpace: 'nowrap' }}>{group || '—'}</td>
+                                <td style={{ padding: '6px 14px', textAlign: 'right', fontWeight: 600, color: 'var(--color-gray-800)', whiteSpace: 'nowrap' }}>
+                                  ₹{s.spend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td style={{ padding: '6px 14px', textAlign: 'right', color: 'var(--color-gray-500)', whiteSpace: 'nowrap' }}>{pct}%</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ borderTop: '2px solid var(--color-gray-300)', background: 'var(--color-gray-50)', position: 'sticky', bottom: 0 }}>
+                            <td colSpan={2} style={{ padding: '8px 14px', fontWeight: 700, color: 'var(--color-gray-800)' }}>TOTAL</td>
+                            <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--color-success-700)', whiteSpace: 'nowrap' }}>
+                              ₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '8px 14px', textAlign: 'right', color: 'var(--color-gray-400)' }}>100%</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   )}
                 </div>
               );
