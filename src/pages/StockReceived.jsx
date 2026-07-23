@@ -93,7 +93,7 @@ export default function StockReceived() {
         const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
         let logsQuery = supabase.from('stock_received')
-          .select('*, inventory_items(name,unit,rate_master(nos_per_kg)), stations!inner(code,name), users_profile(full_name)')
+          .select('*, inventory_items(name,unit,rate_master(nos_per_kg)), stations!station_id(code,name), users_profile(full_name)')
           .gte('received_date', startDate)
           .lte('received_date', endDate)
           .order('received_date', { ascending: false })

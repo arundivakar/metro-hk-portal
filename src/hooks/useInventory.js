@@ -70,7 +70,6 @@ export function useInventory(stationId) {
         users_profile ( full_name )
       `)
       .eq('station_id', sid)
-      .or('supplier.neq.Opening Stock Initialization,supplier.is.null')
       .order('received_date', { ascending: false });
 
     if (filters.from) query = query.gte('received_date', filters.from);
@@ -78,7 +77,8 @@ export function useInventory(stationId) {
 
     const { data, error: err } = await query;
     if (err) throw err;
-    return data ?? [];
+    // Exclude Opening Stock entries in JS (space in value breaks Supabase .or() syntax)
+    return (data ?? []).filter((l) => l.supplier !== 'Opening Stock Initialization');
   }, [stationId]);
 
   // Fetch consumption log
