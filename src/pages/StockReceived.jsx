@@ -94,7 +94,6 @@ export default function StockReceived() {
 
         let logsQuery = supabase.from('stock_received')
           .select('*, inventory_items(name,unit,rate_master(nos_per_kg)), stations!inner(code,name), users_profile(full_name)')
-          .or('supplier.neq.Opening Stock Initialization,supplier.is.null')
           .gte('received_date', startDate)
           .lte('received_date', endDate)
           .order('received_date', { ascending: false })
@@ -109,7 +108,12 @@ export default function StockReceived() {
           logsQuery,
           supabase.from('stations').select('id,code,name').eq('is_active', true),
         ]);
-        setAllLogs(logsRes.data ?? []);
+
+        // Exclude Opening Stock entries in JS (avoids broken .or() Supabase filter syntax)
+        const rawLogs = (logsRes.data ?? []).filter(
+          (l) => l.supplier !== 'Opening Stock Initialization'
+        );
+        setAllLogs(rawLogs);
         const sortedStations = (stationsRes.data ?? []).sort((a, b) => {
           const indexA = STATION_ORDER.indexOf(a.code);
           const indexB = STATION_ORDER.indexOf(b.code);
