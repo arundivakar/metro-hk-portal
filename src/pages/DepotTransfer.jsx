@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Warehouse, Plus, ArrowUpFromLine, ArrowDownToLine } from 'lucide-react';
+import { Warehouse, Plus, ArrowUpFromLine, ArrowDownToLine, Pencil, Trash2 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
@@ -56,6 +56,14 @@ export default function DepotTransfer() {
     remarks: '',
   });
 
+  // ── Edit state ────────────────────────────────────────────────────────────
+  const [editingLog, setEditingLog] = useState(null);
+  const [editForm, setEditForm] = useState({
+    quantity: '',
+    date: today,
+    remarks: '',
+  });
+
   // ── Data Loading ──────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     if (!selectedStation?.id) return;
@@ -67,19 +75,17 @@ export default function DepotTransfer() {
       const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
       const [sentRes, receivedRes, itemsRes, stationsRes] = await Promise.all([
-        // Sent to Depot: consumption_logs for this station with Depot Transfer Out remarks
+        // Sent to Depot: consumption_logs across all stations with Depot Transfer Out remarks
         supabase.from('consumption_logs')
           .select('*, inventory_items(name, unit), stations(code, name), users_profile(full_name)')
-          .eq('station_id', selectedStation.id)
           .like('remarks', 'Depot Transfer Out%')
           .gte('consumption_date', startDate)
           .lte('consumption_date', endDate)
           .order('consumption_date', { ascending: false }),
 
-        // Received from Depot: stock_received for this station where supplier='DEPOT'
+        // Received from Depot: stock_received across all stations where supplier='DEPOT'
         supabase.from('stock_received')
           .select('*, inventory_items(name, unit, rate_master(nos_per_kg)), stations!station_id(code, name), users_profile(full_name)')
-          .eq('station_id', selectedStation.id)
           .eq('supplier', 'DEPOT')
           .gte('received_date', startDate)
           .lte('received_date', endDate)
@@ -211,6 +217,80 @@ export default function DepotTransfer() {
     }
   };
 
+  // ── Edit & Delete Actions ─────────────────────────────────────────────────
+  const openEditModal = (log) => {
+    const isSend = log._type === 'send';
+    const unit = log.inventory_items?.unit || 'Nos';
+    const rawQty = isSend ? log.quantity_used : log.quantity;
+    setEditingLog(log);
+    setEditForm({
+      quantity: toDisplayValue(rawQty, unit),
+      date: isSend ? log.consumption_date : log.received_date,
+      remarks: log.remarks || '',
+    });
+    setError('');
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editingLog) return;
+    setError('');
+    setSubmitting(true);
+    try {
+      const isSend = editingLog._type === 'send';
+      const unit = editingLog.inventory_items?.unit || 'Nos';
+      const baseQty = toBaseValue(parseFloat(editForm.quantity), unit);
+      
+      let errorResult;
+      if (isSend) {
+        const { error: rpcErr } = await supabase.rpc('fn_edit_consumption', {
+          p_log_id: editingLog.id,
+          p_new_quantity: baseQty,
+          p_new_date: editForm.date,
+          p_remarks: editForm.remarks,
+        });
+        errorResult = rpcErr;
+      } else {
+        const { error: rpcErr } = await supabase.rpc('fn_edit_stock_received', {
+          p_log_id: editingLog.id,
+          p_new_quantity: baseQty,
+          p_new_date: editForm.date,
+          p_remarks: editForm.remarks,
+        });
+        errorResult = rpcErr;
+      }
+
+      if (errorResult) throw new Error(errorResult.message);
+      toast.success('Record updated successfully!');
+      setEditingLog(null);
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Failed to update record');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (log) => {
+    if (!window.confirm('Are you sure you want to delete this record? This will revert the inventory balance.')) return;
+    const isSend = log._type === 'send';
+    try {
+      let errorResult;
+      if (isSend) {
+        const { error } = await supabase.rpc('fn_delete_consumption', { p_log_id: log.id });
+        errorResult = error;
+      } else {
+        const { error } = await supabase.rpc('fn_delete_stock_received', { p_log_id: log.id });
+        errorResult = error;
+      }
+      if (errorResult) throw errorResult;
+      toast.success('Record deleted successfully!');
+      loadData();
+    } catch (err) {
+      alert('Failed to delete: ' + err.message);
+    }
+  };
+
   const closeModal = () => {
     setShowModal(false);
     setError('');
@@ -305,8 +385,8 @@ export default function DepotTransfer() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: 'var(--color-gray-50)', borderBottom: '2px solid var(--color-border)' }}>
-                  {['Date', 'Type', 'Station', 'Item', 'Sent to Depot', 'Received from Depot', 'Invoice #', 'By', 'Remarks'].map(h => (
-                    <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Sent to Depot' || h === 'Received from Depot' ? 'right' : 'left', fontWeight: 700, color: 'var(--color-gray-600)', whiteSpace: 'nowrap' }}>{h}</th>
+                  {['Date', 'Type', 'Station', 'Item', 'Sent to Depot', 'Received from Depot', 'Invoice #', 'By', 'Remarks', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '10px 12px', textAlign: (h === 'Sent to Depot' || h === 'Received from Depot' || h === 'Actions') ? 'right' : 'left', fontWeight: 700, color: 'var(--color-gray-600)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -352,6 +432,22 @@ export default function DepotTransfer() {
                       <td style={{ padding: '8px 12px', color: 'var(--color-gray-500)' }}>{!isSend ? (log.invoice_number || '—') : '—'}</td>
                       <td style={{ padding: '8px 12px', color: 'var(--color-gray-600)', whiteSpace: 'nowrap' }}>{byName}</td>
                       <td style={{ padding: '8px 12px', color: 'var(--color-gray-500)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{extraRemark || '—'}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button
+                          onClick={() => openEditModal(log)}
+                          title="Edit"
+                          style={{ background: 'none', border: 'none', color: 'var(--color-primary-600)', cursor: 'pointer', padding: '4px', marginRight: '4px' }}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(log)}
+                          title="Delete"
+                          style={{ background: 'none', border: 'none', color: 'var(--color-danger-600)', cursor: 'pointer', padding: '4px' }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -530,6 +626,47 @@ export default function DepotTransfer() {
               <label className="form-label">Remarks (Optional)</label>
               <textarea className="form-control" rows={2}
                 value={receiveForm.remarks} onChange={e => setReceiveForm(f => ({ ...f, remarks: e.target.value }))} />
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ── Edit Log Modal ── */}
+      <Modal
+        isOpen={!!editingLog}
+        onClose={() => setEditingLog(null)}
+        title={`Edit ${editingLog?._type === 'send' ? 'Sent to Depot' : 'Received from Depot'}`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditingLog(null)}>Cancel</Button>
+            <Button variant="accent" form="edit-log-form" type="submit" isLoading={submitting}>
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        {editingLog && (
+          <form id="edit-log-form" onSubmit={handleSaveEdit}>
+            {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
+            <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)' }}>
+              <p><strong>Item:</strong> {editingLog.inventory_items?.name}</p>
+              <p><strong>Station:</strong> {editingLog.stations?.code}</p>
+            </div>
+            <div className="form-group">
+              <label className="form-label form-label-required">New Quantity ({getDisplayUnit(editingLog.inventory_items?.unit || 'Nos')})</label>
+              <input type="number" min="0.001" step="any" className="form-control"
+                value={editForm.quantity} onChange={(e) => setEditForm(f => ({ ...f, quantity: e.target.value }))} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label form-label-required">Date</label>
+              <input type="date" className="form-control"
+                value={editForm.date} onChange={(e) => setEditForm(f => ({ ...f, date: e.target.value }))} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Remarks</label>
+              <textarea className="form-control" rows={2}
+                value={editForm.remarks} onChange={(e) => setEditForm(f => ({ ...f, remarks: e.target.value }))} />
             </div>
           </form>
         )}
