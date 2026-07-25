@@ -85,26 +85,47 @@ async function drawPageHeader(doc, month, year, logoJpeg, monthName) {
 
   // ── Info row ──
   doc.setFillColor(235, 248, 246);
-  doc.rect(margin, 32, W - margin * 2, 7, 'F');
+  doc.rect(margin, 32, W - margin * 2, 8, 'F');
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(30, 30, 30);
-  const infoY = 36.5;
+  const infoY = 37.5;
+
+  // Month (left)
   doc.setFont('helvetica', 'bold');
-  doc.text(`Month: `, margin + 3, infoY);
+  const monthLabelW = doc.getTextWidth('Month: ');
+  doc.text('Month: ', margin + 3, infoY);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${monthName} ${year}`, margin + 3 + doc.getTextWidth('Month: '), infoY);
+  doc.text(`${monthName} ${year}`, margin + 3 + monthLabelW, infoY);
+
+  // Station Type (centre) — measure widths with the correct font active
+  const stationLabel = 'Station Type: ';
+  const stationValue = 'All Stations (Aggregated)';
   doc.setFont('helvetica', 'bold');
-  doc.text(`Station Type: `, W / 2 - 20, infoY);
+  const stationLabelW = doc.getTextWidth(stationLabel);
   doc.setFont('helvetica', 'normal');
-  doc.text('All Stations (Aggregated)', W / 2 - 20 + doc.getTextWidth('Station Type: '), infoY);
+  const stationValueW = doc.getTextWidth(stationValue);
+  const stationStartX = W / 2 - (stationLabelW + stationValueW) / 2;
   doc.setFont('helvetica', 'bold');
-  doc.text(`Generated On: `, W - margin - 60, infoY);
+  doc.text(stationLabel, stationStartX, infoY);
   doc.setFont('helvetica', 'normal');
-  doc.text(formatDate(new Date()), W - margin - 60 + doc.getTextWidth('Generated On: '), infoY);
+  doc.text(stationValue, stationStartX + stationLabelW, infoY);
+
+  // Generated On (right) — measure widths with the correct font active
+  const genLabel = 'Generated On: ';
+  const genValue = formatDate(new Date());
+  doc.setFont('helvetica', 'bold');
+  const genLabelW = doc.getTextWidth(genLabel);
+  doc.setFont('helvetica', 'normal');
+  const genValueW = doc.getTextWidth(genValue);
+  const genStartX = W - margin - genLabelW - genValueW;
+  doc.setFont('helvetica', 'bold');
+  doc.text(genLabel, genStartX, infoY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(genValue, genStartX + genLabelW, infoY);
 
   doc.setTextColor(0, 0, 0);
-  return 40; // Y where table should start
+  return 41; // Y where table should start
 }
 
 // ─── Draw the footer on each page ────────────────────────────────────────────
@@ -266,13 +287,13 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
       'Cleaning Material',
       'Brand',
       'Supplier',
-      'Rate (₹)',
+      'Rate (Rs.)',
       'ALVA-KLMT',
       'CCUV-JLSD',
       'KALR-KVTR',
       'EMKM-TPHT',
       'Total',
-      'Amount (₹)',
+      'Amount (Rs.)',
     ]],
     body: tableData,
     foot: footData,
@@ -307,18 +328,18 @@ export const generateMonthlyBillPdf = async (month, year, consumptionData, allIt
     },
     columnStyles: {
       //  Total column width must = 297mm - 14mm - 14mm = 269mm (full A4 landscape usable)
-      //  13+55+25+27+20+22+22+22+22+16+25 = 269mm ✓
-      0:  { halign: 'center', cellWidth: 13, fontStyle: 'bold' }, // Sl. No — wide enough for '111'
+      //  13+55+25+27+22+22+22+22+22+16+23 = 269mm ✓
+      0:  { halign: 'center', cellWidth: 13, fontStyle: 'bold' }, // Sl. No
       1:  { cellWidth: 55 },                         // Cleaning Material — widest
       2:  { cellWidth: 25 },                         // Brand
       3:  { cellWidth: 27 },                         // Supplier
-      4:  { halign: 'right',  cellWidth: 20 },       // Rate
+      4:  { halign: 'right',  cellWidth: 22 },       // Rate (widened)
       5:  { halign: 'center', cellWidth: 22 },       // ALVA-KLMT
       6:  { halign: 'center', cellWidth: 22 },       // CCUV-JLSD
       7:  { halign: 'center', cellWidth: 22 },       // KALR-KVTR
       8:  { halign: 'center', cellWidth: 22 },       // EMKM-TPHT
       9:  { halign: 'center', cellWidth: 16 },       // Total
-      10: { halign: 'right',  cellWidth: 25, fontStyle: 'bold' }, // Amount
+      10: { halign: 'right',  cellWidth: 23, fontStyle: 'bold' }, // Amount
     },
     // Repeat header on every page + re-draw our custom header
     didDrawPage: (hookData) => {
