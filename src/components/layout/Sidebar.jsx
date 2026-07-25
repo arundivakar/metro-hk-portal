@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, PackagePlus, TrendingDown,
   ClipboardList, CheckSquare, Boxes, BarChart2,
-  ChevronLeft, ChevronRight, LogOut, Train, Database,
+  ChevronLeft, ChevronRight, LogOut, Train, Database, Warehouse,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useStationStore } from '../../store/stationStore';
@@ -11,7 +11,7 @@ import { NAV_ITEMS, ROLES } from '../../lib/constants';
 
 const ICON_MAP = {
   LayoutDashboard, Package, PackagePlus, TrendingDown,
-  ClipboardList, CheckSquare, Boxes, BarChart2, Database,
+  ClipboardList, CheckSquare, Boxes, BarChart2, Database, Warehouse,
 };
 
 function getInitials(name = '') {
@@ -29,7 +29,15 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const { selectedStation, clearStation } = useStationStore();
   const navigate = useNavigate();
 
-  const navItems = NAV_ITEMS[role] ?? [];
+  const baseNavItems = NAV_ITEMS[role] ?? [];
+  // Inject MUTT-only nav item: Depot Transfer
+  const navItems = (role === ROLES.SC && selectedStation?.code === 'MUTT')
+    ? [
+        ...baseNavItems.slice(0, 3), // Dashboard, Inventory, Stock Received
+        { path: '/depot-transfer', label: 'Depot Transfer', icon: 'Warehouse' },
+        ...baseNavItems.slice(3),    // rest: Consumption Log, Requests, Approvals…
+      ]
+    : baseNavItems;
 
   const handleLogout = async () => {
     clearStation();

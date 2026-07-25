@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import StockReceived from './pages/StockReceived';
+import DepotTransfer from './pages/DepotTransfer';
 import StockMovement from './pages/StockMovement';
 import Requests from './pages/Requests';
 import Approvals from './pages/Approvals';
@@ -73,6 +74,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={[ROLES.SC, ROLES.ALS]}>
               <StockReceived />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/depot-transfer"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.SC]}>
+              <DepotTransfer />
             </ProtectedRoute>
           }
         />
