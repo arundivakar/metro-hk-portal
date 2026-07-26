@@ -453,13 +453,21 @@ export default function StockReceived() {
       key: 'actions', 
       label: 'Actions', 
       render: (_, row) => {
+        // Can only edit/delete if ALS or if SC owns the log
+        const canAction = role === ROLES.ALS || (role === ROLES.SC && row.station_id === selectedStation?.id);
+        if (!canAction) return null;
+
         if (row.source_station_id) {
-          return <span style={{ fontSize: '0.78rem', color: 'var(--color-gray-400)', fontStyle: 'italic' }}>System record</span>;
+          // Inter-station transfers can only be deleted, not edited
+          return (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-danger-600)' }} onClick={() => handleDelete(row)} title="Delete Transfer (will restore source stock)">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
         }
 
-        // Can only edit if ALS or if SC owns the log
-        const canEdit = role === ROLES.ALS || (role === ROLES.SC && row.station_id === selectedStation?.id);
-        if (!canEdit) return null;
         return (
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-primary-600)' }} onClick={() => handleEdit(row)} title="Edit">
