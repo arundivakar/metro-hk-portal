@@ -273,7 +273,11 @@ export default function StockReceived() {
       setEditingLog(null);
       loadData();
     } catch (err) {
-      setError(err.message);
+      if (err.message && err.message.includes('chk_stock_non_negative')) {
+        setError("You cannot edit this entry because reducing the quantity would cause the physical stock to become negative. The item has likely already been consumed.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -287,7 +291,11 @@ export default function StockReceived() {
       toast.success('Log deleted successfully.');
       loadData();
     } catch (err) {
-      toast.error('Failed to delete: ' + err.message);
+      if (err.message && err.message.includes('chk_stock_non_negative')) {
+        toast.error("You cannot delete this entry because the physical stock will become negative. The item has already been consumed.", { duration: 5000 });
+      } else {
+        toast.error('Failed to delete: ' + err.message);
+      }
     }
   };
 
