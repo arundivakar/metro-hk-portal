@@ -250,6 +250,7 @@ export default function StockReceived() {
     setEditForm({
       quantity: log.quantity,
       received_date: log.received_date,
+      supplier: log.supplier || log.stations?.code || '',
       remarks: log.remarks || ''
     });
     setError('');
@@ -264,7 +265,8 @@ export default function StockReceived() {
         p_log_id: editingLog.id,
         p_new_quantity: parseFloat(editForm.quantity),
         p_new_date: editForm.received_date,
-        p_remarks: editForm.remarks || null
+        p_remarks: editForm.remarks || null,
+        p_new_supplier: editForm.supplier || null
       });
       if (err) throw err;
       toast.success('Stock received log updated!');
@@ -773,6 +775,14 @@ export default function StockReceived() {
               <input id="el-date" type="date" className="form-control"
                 value={editForm.received_date} onChange={(e) => setEditForm(f => ({ ...f, received_date: e.target.value }))} required />
             </div>
+            {(!editingLog.source_station_id) && (
+              <div className="form-group">
+                <label className="form-label form-label-required" htmlFor="el-supplier">Received From</label>
+                <input id="el-supplier" type="text" className="form-control"
+                  value={editForm.supplier} onChange={(e) => setEditForm(f => ({ ...f, supplier: e.target.value }))} required />
+                <small style={{ color: 'var(--color-gray-500)' }}>e.g. KDS, KLMT, AATK, or Vendor Name</small>
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label" htmlFor="el-remarks">Remarks</label>
               <textarea id="el-remarks" className="form-control" rows={2}
