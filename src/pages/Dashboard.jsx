@@ -354,6 +354,15 @@ function ALSDashboard() {
           finalData = finalData.filter(v => allowedStations.includes(v.stations?.code));
         }
         
+        // Deduplicate by station and period (keep the latest, which is first since it's ordered by completed_at desc)
+        const seen = new Set();
+        finalData = finalData.filter(v => {
+          const key = `${v.station_id}-${v.verification_period}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
         setVerifications(finalData.map(v => ({
           id: v.id,
           station: v.stations?.code || '-',

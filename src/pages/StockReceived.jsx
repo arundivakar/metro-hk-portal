@@ -414,7 +414,7 @@ export default function StockReceived() {
     if (s.id === selectedStation?.id) return false; // exclude self
     if (!form.item_id) return true;                  // no item selected yet — show all
     return (stationStockMap[s.id] || 0) > 0;         // only stations with stock
-  });
+  }).sort((a, b) => a.code.localeCompare(b.code));
 
   const allowedStations = ALS_GROUPS[alsGroupFilter];
 

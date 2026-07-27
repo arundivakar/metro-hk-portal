@@ -309,14 +309,24 @@ export default function StockMovement() {
   };
 
   const handleDelete = async (log) => {
-    if (!window.confirm('Are you sure you want to delete this consumption log? Physical stock will be refunded.')) return;
+    const isTransferOut = log.remarks?.startsWith('Inter-Station Transfer Out') || log.remarks?.startsWith('Depot Transfer Out');
+    const confirmMessage = isTransferOut 
+      ? 'Are you sure you want to delete this transfer? This will refund stock to this station, and automatically remove the received stock from the destination station (which might cause their stock to become negative if they already consumed it).'
+      : 'Are you sure you want to delete this consumption log? Physical stock will be refunded.';
+
+    if (!window.confirm(confirmMessage)) return;
+
     try {
       const { error: err } = await supabase.rpc('fn_delete_consumption', { p_log_id: log.id });
       if (err) throw err;
       toast.success('Log deleted successfully.');
       loadData();
     } catch (err) {
-      toast.error('Failed to delete: ' + err.message);
+      if (err.message?.includes('chk_stock_non_negative')) {
+        toast.error('Cannot delete this transfer because the destination station has already consumed this stock, and deleting it would cause their stock to become negative.');
+      } else {
+        toast.error('Failed to delete: ' + err.message);
+      }
     }
   };
 
@@ -423,18 +433,19 @@ export default function StockMovement() {
       key: 'actions', 
       label: 'Actions', 
       render: (_, row) => {
-        // Transfer-out logs are system-generated paired records — do not allow editing/deleting
+        // Transfer-out logs are system-generated paired records - allow deleting, but not editing
         const isTransferOut = row.remarks?.startsWith('Inter-Station Transfer Out') || row.remarks?.startsWith('Depot Transfer Out');
-        if (isTransferOut) {
-          return <span style={{ fontSize: '0.78rem', color: 'var(--color-gray-400)', fontStyle: 'italic' }}>System record</span>;
-        }
+        
         const canEdit = role === ROLES.ALS || (role === ROLES.SC && row.station_id === selectedStation?.id);
         if (!canEdit) return null;
+
         return (
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-primary-600)' }} onClick={() => handleEdit(row)} title="Edit">
-              <Pencil size={16} />
-            </button>
+            {!isTransferOut && (
+              <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-primary-600)' }} onClick={() => handleEdit(row)} title="Edit">
+                <Pencil size={16} />
+              </button>
+            )}
             <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--color-danger-600)' }} onClick={() => handleDelete(row)} title="Delete">
               <Trash2 size={16} />
             </button>
