@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -9,8 +9,8 @@ import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Alert from '../components/ui/Alert';
 import toast from 'react-hot-toast';
-import { FileUp, DatabaseZap, ShieldAlert, Pencil } from 'lucide-react';
-import { formatStock } from '../utils/units';
+import { FileUp, DatabaseZap, ShieldAlert, FlaskConical, Eye, CheckCircle2, TriangleAlert, ArrowRight } from 'lucide-react';
+import { formatStock, toDisplayValue, toBaseValue, getDisplayUnit } from '../utils/units';
 
 export default function DataInitialization() {
   const { role } = useAuthStore();
@@ -30,35 +30,113 @@ export default function DataInitialization() {
   const [isUploadingStock, setIsUploadingStock] = useState(false);
   const [stockError, setStockError] = useState('');
   
-  // Manual Stock State
+  // Items list
   const [items, setItems] = useState([]);
-  const [manualStationId, setManualStationId] = useState('');
-  const [manualItemId, setManualItemId] = useState('');
-  const [manualQty, setManualQty] = useState('');
-  const [isUpdatingManual, setIsUpdatingManual] = useState(false);
-  const [manualError, setManualError] = useState('');
-  
-  const [currentStockVal, setCurrentStockVal] = useState(null);
-  const [isFetchingStock, setIsFetchingStock] = useState(false);
+
+  // ── July Opening Stock Correction state ───────────────────────────────────
+  const [corrStationId, setCorrStationId] = useState('');
+  const [corrItemId, setCorrItemId]       = useState('');
+  const [corrNewQty, setCorrNewQty]       = useState('');
+  const [corrReason, setCorrReason]       = useState('');
+  const [corrCurrentOpening, setCorrCurrentOpening] = useState(null); // base units
+  const [corrLoading, setCorrLoading]     = useState(false);
+  const [corrError, setCorrError]         = useState('');
+  const [corrPreview, setCorrPreview]     = useState(null);  // array of month objects
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [corrApplying, setCorrApplying]   = useState(false);
+
+  // Fetch all txn data for selected station+item to compute July Opening Stock
+  const fetchCorrectionData = useCallback(async (stationId, itemId) => {
+    setCorrLoading(true);
+    setCorrCurrentOpening(null);
+    setCorrPreview(null);
+    setCorrNewQty('');
+    setCorrReason('');
+    setCorrError('');
+    try {
+      const [{ data: inv }, { data: receipts }, { data: consumptions }] = await Promise.all([
+        supabase.from('station_inventory').select('current_stock').eq('station_id', stationId).eq('item_id', itemId).maybeSingle(),
+        supabase.from('stock_received').select('quantity, received_date, supplier').eq('station_id', stationId).eq('item_id', itemId),
+        supabase.from('consumption_logs').select('quantity_used, consumption_date').eq('station_id', stationId).eq('item_id', itemId),
+      ]);
+      if (!inv) { setCorrError('No inventory record found for this item at the selected station.'); return; }
+      // Compute July Opening Stock = visualOpeningStock for 2026-07
+      const opening = computeJulyOpeningStock(inv.current_stock, receipts || [], consumptions || []);
+      setCorrCurrentOpening(opening);
+    } catch (err) {
+      setCorrError(err.message || 'Failed to load stock data.');
+    } finally {
+      setCorrLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (manualStationId && manualItemId) {
-      const fetchStock = async () => {
-        setIsFetchingStock(true);
-        const { data } = await supabase
-          .from('station_inventory')
-          .select('current_stock')
-          .eq('station_id', manualStationId)
-          .eq('item_id', manualItemId)
-          .maybeSingle();
-        setCurrentStockVal(data?.current_stock ?? 0);
-        setIsFetchingStock(false);
-      };
-      fetchStock();
-    } else {
-      setCurrentStockVal(null);
+    if (corrStationId && corrItemId) fetchCorrectionData(corrStationId, corrItemId);
+    else { setCorrCurrentOpening(null); setCorrPreview(null); setCorrNewQty(''); setCorrError(''); }
+  }, [corrStationId, corrItemId, fetchCorrectionData]);
+
+  // Build preview for all months from July 2026 to current month
+  const handlePreview = async () => {
+    if (!corrStationId || !corrItemId || corrNewQty === '' || !corrReason.trim()) {
+      return setCorrError('Please fill Station, Item, Correct Opening Stock, and Reason before previewing.');
     }
-  }, [manualStationId, manualItemId]);
+    const selectedItem = items.find(i => i.id === corrItemId);
+    if (!selectedItem) return;
+    const dbUnit = selectedItem.unit || 'Nos';
+    const newBaseQty = toBaseValue(Number(corrNewQty), dbUnit);
+    if (isNaN(newBaseQty) || newBaseQty < 0) return setCorrError('Please enter a valid non-negative quantity.');
+
+    setPreviewLoading(true);
+    setCorrError('');
+    setCorrPreview(null);
+    try {
+      const [{ data: inv }, { data: receipts }, { data: consumptions }] = await Promise.all([
+        supabase.from('station_inventory').select('current_stock').eq('station_id', corrStationId).eq('item_id', corrItemId).maybeSingle(),
+        supabase.from('stock_received').select('quantity, received_date, supplier').eq('station_id', corrStationId).eq('item_id', corrItemId),
+        supabase.from('consumption_logs').select('quantity_used, consumption_date').eq('station_id', corrStationId).eq('item_id', corrItemId),
+      ]);
+      const delta = newBaseQty - corrCurrentOpening;
+      const preview = buildMonthPreview(inv.current_stock, receipts || [], consumptions || [], delta, dbUnit);
+      setCorrPreview(preview);
+    } catch (err) {
+      setCorrError(err.message || 'Failed to build preview.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleApplyCorrection = async () => {
+    if (!corrPreview) return;
+    const selectedItem = items.find(i => i.id === corrItemId);
+    if (!selectedItem) return;
+    const dbUnit = selectedItem.unit || 'Nos';
+    const newBaseQty = toBaseValue(Number(corrNewQty), dbUnit);
+    setCorrApplying(true);
+    setCorrError('');
+    try {
+      const { error } = await supabase.rpc('fn_correct_july_opening_stock', {
+        p_station_id:        corrStationId,
+        p_item_id:           corrItemId,
+        p_old_opening_stock: corrCurrentOpening,
+        p_new_opening_stock: newBaseQty,
+        p_reason:            corrReason.trim(),
+        p_applied_by:        profile?.id ?? null,
+      });
+      if (error) throw error;
+      toast.success('July Opening Stock corrected successfully!');
+      // Reset
+      setCorrStationId('');
+      setCorrItemId('');
+      setCorrNewQty('');
+      setCorrReason('');
+      setCorrCurrentOpening(null);
+      setCorrPreview(null);
+    } catch (err) {
+      setCorrError(err.message || 'Failed to apply correction.');
+    } finally {
+      setCorrApplying(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -293,61 +371,66 @@ export default function DataInitialization() {
     });
   };
 
-  const handleManualStockUpdate = async () => {
-    if (!manualStationId || !manualItemId || manualQty === '') {
-      return setManualError('Please fill all fields');
+  // ── Helper: compute July Opening Stock for an item using the StockMovement formula ──
+  // All dates are 'YYYY-MM-DD' strings.
+  function computeJulyOpeningStock(currentStock, receipts, consumptions) {
+    const julEnd = '2026-07-31';
+    const receiptsAfter    = receipts.filter(r => r.received_date > julEnd).reduce((s, r) => s + Number(r.quantity), 0);
+    const consumptionsAfter = consumptions.filter(c => c.consumption_date > julEnd).reduce((s, c) => s + Number(c.quantity_used), 0);
+    const closingJul       = Number(currentStock) - receiptsAfter + consumptionsAfter;
+    const receiptsDuring   = receipts.filter(r => r.received_date <= julEnd && r.supplier !== 'Opening Stock Initialization').reduce((s, r) => s + Number(r.quantity), 0);
+    const initDuring       = receipts.filter(r => r.received_date <= julEnd && r.supplier === 'Opening Stock Initialization').reduce((s, r) => s + Number(r.quantity), 0);
+    const consumpDuring    = consumptions.filter(c => c.consumption_date <= julEnd).reduce((s, c) => s + Number(c.quantity_used), 0);
+    const trueOpening      = closingJul - (receiptsDuring + initDuring) + consumpDuring;
+    return trueOpening + initDuring; // visualOpeningStock
+  }
+
+  // ── Helper: build month-by-month preview ──────────────────────────────────
+  function buildMonthPreview(currentStock, receipts, consumptions, delta, dbUnit) {
+    const today = new Date();
+    const months = [];
+    let yr = 2026, mo = 7;
+    while (yr < today.getFullYear() || (yr === today.getFullYear() && mo <= today.getMonth() + 1)) {
+      months.push({ yr, mo });
+      mo++; if (mo > 12) { mo = 1; yr++; }
     }
-    
-    setManualError('');
-    setIsUpdatingManual(true);
-    
-    try {
-      const selectedItem = items.find(i => i.id === manualItemId);
-      if (!selectedItem) throw new Error('Item not found');
-      
-      const qty = Number(manualQty);
-      if (isNaN(qty) || qty < 0) throw new Error('Quantity must be a positive number');
-      
-      // Convert to base unit for storage (e.g. Ltr -> ml)
-      let baseQty = qty;
-      const unit = selectedItem.unit || 'Nos';
-      const u = unit.toLowerCase();
-      if (u === 'ml' || u === 'ltr' || u === 'l' || u === 'g' || u === 'kg') {
-        baseQty = qty * 1000;
-      }
+    const disp = unit => getDisplayUnit(unit);
+    const fmt = (v) => {
+      const d = getDisplayUnit(dbUnit);
+      const dv = toDisplayValue(v, dbUnit);
+      return d === 'Nos' ? `${Math.round(dv)}` : `${dv.toFixed(2)}`;
+    };
 
-      // Check if inventory record already exists for this station/item
-      const { data: existing, error: fetchErr } = await supabase
-        .from('station_inventory')
-        .select('id')
-        .eq('station_id', manualStationId)
-        .eq('item_id', manualItemId)
-        .maybeSingle();
-        
-      if (fetchErr) throw fetchErr;
+    return months.map(({ yr, mo }) => {
+      const padMo = String(mo).padStart(2, '0');
+      const lastDay = new Date(yr, mo, 0).getDate();
+      const endDate = `${yr}-${padMo}-${String(lastDay).padStart(2, '0')}`;
+      const startDate = `${yr}-${padMo}-01`;
 
-      const now = new Date().toISOString();
+      // BEFORE
+      const rAfter  = receipts.filter(r => r.received_date > endDate).reduce((s, r) => s + Number(r.quantity), 0);
+      const cAfter  = consumptions.filter(c => c.consumption_date > endDate).reduce((s, c) => s + Number(c.quantity_used), 0);
+      const closingB = Math.max(0, Number(currentStock) - rAfter + cAfter);
+      const rDuring  = receipts.filter(r => r.received_date <= endDate && r.received_date >= startDate && r.supplier !== 'Opening Stock Initialization').reduce((s, r) => s + Number(r.quantity), 0);
+      const initD    = receipts.filter(r => r.received_date <= endDate && r.supplier === 'Opening Stock Initialization').reduce((s, r) => s + Number(r.quantity), 0);
+      const cDuring  = consumptions.filter(c => c.consumption_date <= endDate).reduce((s, c) => s + Number(c.quantity_used), 0);
+      const openB    = Math.max(0, closingB - (rDuring + initD) + cDuring + initD);
 
-      // We use an RPC because station_inventory has RLS policies that block direct client inserts/updates
-      const { error: rpcErr } = await supabase.rpc('fn_adjust_single_stock', {
-        p_station_id: manualStationId,
-        p_item_id: manualItemId,
-        p_new_stock: baseQty
-      });
-      
-      if (rpcErr) throw rpcErr;
+      // AFTER (shift current_stock by delta)
+      const closingA = Math.max(0, (Number(currentStock) + delta) - rAfter + cAfter);
+      const openA    = Math.max(0, closingA - (rDuring + initD) + cDuring + initD);
 
-      toast.success('Stock updated successfully!');
-      setManualQty('');
-      // Immediately update the current stock display so the user sees the change
-      setCurrentStockVal(baseQty);
-    } catch (err) {
-      console.error(err);
-      setManualError(err.message || 'Failed to update stock');
-    } finally {
-      setIsUpdatingManual(false);
-    }
-  };
+      const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return {
+        label: `${MONTH_NAMES[mo]} ${yr}`,
+        openBefore:   fmt(openB),
+        openAfter:    fmt(openA),
+        closeBefore:  fmt(closingB),
+        closeAfter:   fmt(closingA),
+        changed: openB !== openA || closingB !== closingA,
+      };
+    });
+  }
 
   // Restrict Master List wipe to ALS and PNCU SC
   const canWipeMaster = role === ROLES.ALS || (role === ROLES.SC && selectedStation?.code === 'PNCU');
@@ -457,88 +540,192 @@ export default function DataInitialization() {
         </Card>
 
         <Card style={{ borderTop: '4px solid var(--color-warning-500)' }}>
-          <CardHeader 
-            title="3. Manual Stock Adjustment" 
-            icon={<Pencil size={20} color="var(--color-warning-600)" />} 
+          <CardHeader
+            title="3. Initial Opening Stock Correction (July Only)"
+            icon={<FlaskConical size={20} color="var(--color-warning-600)" />}
           />
           <CardBody>
+
+            {/* Warning banner */}
             <Alert variant="warning" style={{ marginBottom: 'var(--space-4)' }}>
-              Use this tool to directly edit the current stock of a specific item at a station. This bypasses CSV uploads and applies immediately.
+              <strong><TriangleAlert size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />One-Time Stabilization Tool.</strong>{' '}
+              This corrects the initial July Opening Stock only. It adjusts all subsequent months automatically by propagating the delta forward.
+              Do NOT use this for normal inventory adjustments or any month other than July.
             </Alert>
 
-            {manualError && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{manualError}</Alert>}
+            {corrError && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{corrError}</Alert>}
 
+            {/* Station */}
             <div className="form-group">
-              <label className="form-label form-label-required">Select Station</label>
-              <select 
-                className="form-control" 
-                value={manualStationId} 
-                onChange={(e) => setManualStationId(e.target.value)}
-              >
+              <label className="form-label form-label-required">Station</label>
+              <select className="form-control" value={corrStationId} onChange={e => { setCorrStationId(e.target.value); setCorrItemId(''); }}>
                 <option value="">— Select Station —</option>
-                {allowedStationsForUser.map(s => (
-                  <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
-                ))}
+                {allowedStationsForUser.map(s => <option key={s.id} value={s.id}>{s.code} – {s.name}</option>)}
               </select>
             </div>
 
+            {/* Item */}
             <div className="form-group">
-              <label className="form-label form-label-required">Select Item</label>
-              <select 
-                className="form-control" 
-                value={manualItemId} 
-                onChange={(e) => setManualItemId(e.target.value)}
-              >
+              <label className="form-label form-label-required">Item</label>
+              <select className="form-control" value={corrItemId} onChange={e => setCorrItemId(e.target.value)} disabled={!corrStationId}>
                 <option value="">— Select Item —</option>
                 {items.map(item => {
-                   let displayUnit = 'Nos';
-                   const u = (item.unit || '').toLowerCase();
-                   if (u === 'ml' || u === 'ltr' || u === 'l') displayUnit = 'Ltr';
-                   if (u === 'g' || u === 'kg') displayUnit = 'Kg';
-                   
-                   const rm = Array.isArray(item.rate_master) ? item.rate_master[0] : item.rate_master;
-                   const brand = rm?.brand;
-                   const tenderYear = rm?.tender_year;
-                   
-                   const brandStr = brand ? ` | ${brand}` : '';
-                   const tenderStr = tenderYear && tenderYear !== '—' ? ` | ${tenderYear}` : '';
-
-                   return <option key={item.id} value={item.id}>{item.name}{brandStr}{tenderStr} ({displayUnit})</option>;
+                  const rm = Array.isArray(item.rate_master) ? item.rate_master[0] : item.rate_master;
+                  const brand = rm?.brand ? ` | ${rm.brand}` : '';
+                  const dispUnit = getDisplayUnit(item.unit || 'Nos');
+                  return <option key={item.id} value={item.id}>{item.name}{brand} ({dispUnit})</option>;
                 })}
               </select>
-              {currentStockVal !== null && manualStationId && manualItemId && (
-                <div style={{ marginTop: '0.4rem', fontSize: '0.85rem', color: 'var(--color-primary-700)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  {isFetchingStock ? (
-                    'Fetching current stock...'
-                  ) : (
-                    <>Current Stock: {formatStock(currentStockVal, items.find(i => i.id === manualItemId)?.unit || 'Nos')}</>
-                  )}
+            </div>
+
+            {/* Current Opening Stock (read-only) */}
+            {corrItemId && (
+              <div className="form-group">
+                <label className="form-label">Current July Opening Stock (Read Only)</label>
+                <div style={{
+                  padding: '0.5rem 0.75rem',
+                  background: 'var(--color-gray-50)',
+                  border: '1px solid var(--color-gray-200)',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: 'var(--font-size-sm)',
+                  fontWeight: 600,
+                  color: 'var(--color-gray-700)',
+                  minHeight: '2.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}>
+                  {corrLoading ? 'Loading…' : corrCurrentOpening !== null
+                    ? formatStock(corrCurrentOpening, items.find(i => i.id === corrItemId)?.unit || 'Nos')
+                    : '—'}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            <div className="form-group">
-              <label className="form-label form-label-required">New Quantity</label>
-              <input 
-                type="number"
-                step="0.01"
-                min="0"
-                className="form-control"
-                placeholder="Enter new quantity in Ltr, Kg, or Nos"
-                value={manualQty}
-                onChange={(e) => setManualQty(e.target.value)}
-              />
-            </div>
+            {/* Correct Opening Stock */}
+            {corrCurrentOpening !== null && (() => {
+              const selectedItem = items.find(i => i.id === corrItemId);
+              const dbUnit = selectedItem?.unit || 'Nos';
+              const dispUnit = getDisplayUnit(dbUnit);
+              const currentDisp = toDisplayValue(corrCurrentOpening, dbUnit);
+              const newDisp = corrNewQty !== '' ? Number(corrNewQty) : null;
+              const diffDisp = newDisp !== null ? (newDisp - currentDisp) : null;
+              return (
+                <>
+                  <div className="form-group">
+                    <label className="form-label form-label-required">Correct July Opening Stock ({dispUnit})</label>
+                    <input
+                      type="number" step="0.01" min="0"
+                      className="form-control"
+                      placeholder={`Enter correct value in ${dispUnit}`}
+                      value={corrNewQty}
+                      onChange={e => { setCorrNewQty(e.target.value); setCorrPreview(null); }}
+                    />
+                    {diffDisp !== null && diffDisp !== 0 && (
+                      <div style={{
+                        marginTop: '0.4rem', fontSize: '0.82rem', fontWeight: 600,
+                        color: diffDisp > 0 ? 'var(--color-success-600)' : 'var(--color-danger-600)',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}>
+                        <ArrowRight size={13} />
+                        Difference: {diffDisp > 0 ? '+' : ''}{diffDisp.toFixed(dispUnit === 'Nos' ? 0 : 2)} {dispUnit}
+                      </div>
+                    )}
+                  </div>
 
-            <Button 
-              variant="primary" 
-              onClick={handleManualStockUpdate} 
-              isLoading={isUpdatingManual}
-              disabled={!manualStationId || !manualItemId || manualQty === ''}
-              style={{ width: '100%', background: 'var(--color-warning-600)' }}
-            >
-              <Pencil size={16} /> Update Stock
-            </Button>
+                  {/* Reason */}
+                  <div className="form-group">
+                    <label className="form-label form-label-required">Reason for Correction</label>
+                    <textarea
+                      className="form-control"
+                      rows={2}
+                      placeholder="Describe why the opening stock needs correction…"
+                      value={corrReason}
+                      onChange={e => { setCorrReason(e.target.value); setCorrPreview(null); }}
+                      style={{ resize: 'vertical' }}
+                    />
+                  </div>
+
+                  {/* Preview Button */}
+                  <Button
+                    variant="secondary"
+                    onClick={handlePreview}
+                    isLoading={previewLoading}
+                    disabled={corrNewQty === '' || !corrReason.trim() || previewLoading}
+                    style={{ width: '100%', marginBottom: 'var(--space-3)' }}
+                  >
+                    <Eye size={15} /> Preview Impact
+                  </Button>
+
+                  {/* Preview Panel */}
+                  {corrPreview && (
+                    <div style={{
+                      border: '1px solid var(--color-gray-200)',
+                      borderRadius: 'var(--radius-md)',
+                      overflow: 'hidden',
+                      marginBottom: 'var(--space-4)',
+                    }}>
+                      <div style={{
+                        background: 'var(--color-primary-50)',
+                        borderBottom: '1px solid var(--color-gray-200)',
+                        padding: '0.5rem 0.75rem',
+                        fontWeight: 700,
+                        fontSize: 'var(--font-size-xs)',
+                        color: 'var(--color-primary-700)',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr 1fr',
+                        gap: '0.5rem',
+                      }}>
+                        <span>Month</span>
+                        <span>Opening Stock</span>
+                        <span>Closing Stock</span>
+                      </div>
+                      {corrPreview.map((row, i) => (
+                        <div key={i} style={{
+                          padding: '0.5rem 0.75rem',
+                          borderBottom: i < corrPreview.length - 1 ? '1px solid var(--color-gray-100)' : 'none',
+                          background: row.changed ? 'var(--color-warning-50)' : 'white',
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr 1fr',
+                          gap: '0.5rem',
+                          fontSize: 'var(--font-size-xs)',
+                          alignItems: 'center',
+                        }}>
+                          <span style={{ fontWeight: 600, color: 'var(--color-gray-800)' }}>{row.label}</span>
+                          <span>
+                            {row.changed && row.openBefore !== row.openAfter ? (
+                              <><span style={{ color: 'var(--color-danger-500)', textDecoration: 'line-through' }}>{row.openBefore}</span>{' '}
+                                <ArrowRight size={10} style={{ verticalAlign: 'middle', color: 'var(--color-gray-400)' }} />{' '}
+                                <span style={{ color: 'var(--color-success-600)', fontWeight: 700 }}>{row.openAfter}</span></>
+                            ) : <span style={{ color: 'var(--color-gray-500)' }}>{row.openAfter}</span>}
+                          </span>
+                          <span>
+                            {row.changed && row.closeBefore !== row.closeAfter ? (
+                              <><span style={{ color: 'var(--color-danger-500)', textDecoration: 'line-through' }}>{row.closeBefore}</span>{' '}
+                                <ArrowRight size={10} style={{ verticalAlign: 'middle', color: 'var(--color-gray-400)' }} />{' '}
+                                <span style={{ color: 'var(--color-success-600)', fontWeight: 700 }}>{row.closeAfter}</span></>
+                            ) : <span style={{ color: 'var(--color-gray-500)' }}>{row.closeAfter}</span>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Apply Button */}
+                  {corrPreview && (
+                    <Button
+                      variant="primary"
+                      onClick={handleApplyCorrection}
+                      isLoading={corrApplying}
+                      disabled={corrApplying}
+                      style={{ width: '100%', background: 'var(--color-warning-600)' }}
+                    >
+                      <CheckCircle2 size={15} /> Apply Correction
+                    </Button>
+                  )}
+                </>
+              );
+            })()}
+
           </CardBody>
         </Card>
 
