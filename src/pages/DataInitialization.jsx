@@ -13,7 +13,7 @@ import { FileUp, DatabaseZap, ShieldAlert, FlaskConical, Eye, CheckCircle2, Tria
 import { formatStock, toDisplayValue, toBaseValue, getDisplayUnit } from '../utils/units';
 
 export default function DataInitialization() {
-  const { role } = useAuthStore();
+  const { role, profile } = useAuthStore();
   const { selectedStation } = useStationStore();
   const [stations, setStations] = useState([]);
   const isBusy = useRef(false);
