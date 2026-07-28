@@ -33,6 +33,10 @@ export default function AssetLifecycle() {
   const [editingLog, setEditingLog] = useState(null);
   const [editLogForm, setEditLogForm] = useState({ quantity: '', remarks: '' });
 
+  // ALS direct asset edit state
+  const [editAsset, setEditAsset] = useState(null);
+  const [editAssetForm, setEditAssetForm] = useState({ in_use: '', damaged: '', disposed: '', remarks: '' });
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -206,6 +210,52 @@ export default function AssetLifecycle() {
     }
   };
 
+  const handleOpenEditAsset = (row) => {
+    setEditAsset(row);
+    setEditAssetForm({
+      in_use:   String(row.quantity_in_use   ?? 0),
+      damaged:  String(row.quantity_damaged  ?? 0),
+      disposed: String(row.quantity_disposed ?? 0),
+      remarks: '',
+    });
+    setError('');
+  };
+
+  const handleSaveAssetEdit = async () => {
+    const inUse   = parseInt(editAssetForm.in_use,   10);
+    const damaged  = parseInt(editAssetForm.damaged,  10);
+    const disposed = parseInt(editAssetForm.disposed, 10);
+    if ([inUse, damaged, disposed].some(v => isNaN(v) || v < 0)) {
+      setError('All quantities must be 0 or a positive whole number.');
+      return;
+    }
+    if (!editAssetForm.remarks.trim()) {
+      setError('Reason is required.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const { error: err } = await supabase.rpc('fn_als_adjust_asset_buckets', {
+        p_station_id:  editAsset.station_id,
+        p_item_id:     editAsset.item_id,
+        p_in_use:      inUse,
+        p_damaged:     damaged,
+        p_disposed:    disposed,
+        p_remarks:     editAssetForm.remarks.trim(),
+        p_user_id:     profile?.id ?? null,
+      });
+      if (err) throw err;
+      toast.success('Asset quantities updated!');
+      setEditAsset(null);
+      loadData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const getAvailableFromStatuses = (row) => {
     const froms = [];
     if (row.quantity_in_use > 0) froms.push(ASSET_STATUS.IN_USE);
@@ -260,6 +310,15 @@ export default function AssetLifecycle() {
           </Button>
         );
       },
+    }] : []),
+    ...(role === ROLES.ALS ? [{
+      key: 'als_edit', label: 'Edit',
+      render: (_, r) => (
+        <Button variant="outline" size="sm" onClick={() => handleOpenEditAsset(r)}
+          style={{ color: 'var(--color-primary-600)', borderColor: 'var(--color-primary-300)' }}>
+          <Pencil size={13} style={{ marginRight: 4 }} />Edit
+        </Button>
+      ),
     }] : []),
   ];
 
@@ -508,7 +567,68 @@ export default function AssetLifecycle() {
             </div>
           </form>
         )}
-      </Modal>
+        </Modal>
+
+      {/* ALS: Edit Asset Quantities Modal */}
+      {role === ROLES.ALS && (
+        <Modal
+          isOpen={!!editAsset}
+          onClose={() => setEditAsset(null)}
+          title="Edit Asset Quantities (ALS)"
+          size="sm"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setEditAsset(null)}>Cancel</Button>
+              <Button variant="primary" isLoading={submitting} onClick={handleSaveAssetEdit}>
+                Save Changes
+              </Button>
+            </>
+          }
+        >
+          {editAsset && (
+            <>
+              {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
+              <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)', background: 'var(--color-gray-50)', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)' }}>
+                <strong>{editAsset.inventory_items?.name}</strong>
+                {editAsset.inventory_items?.rate_master?.tender_year && (
+                  <span style={{ marginLeft: 8, color: 'var(--color-gray-500)' }}>({editAsset.inventory_items.rate_master.tender_year})</span>
+                )}
+                <br />
+                <span style={{ color: 'var(--color-gray-500)' }}>{editAsset.stations?.code} — {editAsset.stations?.name}</span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="ea-in-use">In Good Condition (In Use)</label>
+                <input id="ea-in-use" type="number" min="0" step="1" className="form-control"
+                  value={editAssetForm.in_use}
+                  onChange={e => setEditAssetForm(f => ({ ...f, in_use: e.target.value }))} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="ea-damaged">Partially Damaged (Usable)</label>
+                <input id="ea-damaged" type="number" min="0" step="1" className="form-control"
+                  value={editAssetForm.damaged}
+                  onChange={e => setEditAssetForm(f => ({ ...f, damaged: e.target.value }))} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="ea-disposed">Disposed (Unusable)</label>
+                <input id="ea-disposed" type="number" min="0" step="1" className="form-control"
+                  value={editAssetForm.disposed}
+                  onChange={e => setEditAssetForm(f => ({ ...f, disposed: e.target.value }))} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label form-label-required" htmlFor="ea-reason">Reason for Edit</label>
+                <textarea id="ea-reason" className="form-control" rows={2}
+                  placeholder="Why are these quantities being corrected?"
+                  value={editAssetForm.remarks}
+                  onChange={e => setEditAssetForm(f => ({ ...f, remarks: e.target.value }))} />
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
     </Layout>
   );
 }
