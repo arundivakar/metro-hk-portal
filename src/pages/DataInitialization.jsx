@@ -572,8 +572,10 @@ export default function DataInitialization() {
                 {items.map(item => {
                   const rm = Array.isArray(item.rate_master) ? item.rate_master[0] : item.rate_master;
                   const brand = rm?.brand ? ` | ${rm.brand}` : '';
+                  const tenderYear = rm?.tender_year;
+                  const tenderStr = tenderYear && tenderYear !== '—' ? ` | ${tenderYear}` : '';
                   const dispUnit = getDisplayUnit(item.unit || 'Nos');
-                  return <option key={item.id} value={item.id}>{item.name}{brand} ({dispUnit})</option>;
+                  return <option key={item.id} value={item.id}>{item.name}{brand}{tenderStr} ({dispUnit})</option>;
                 })}
               </select>
             </div>
