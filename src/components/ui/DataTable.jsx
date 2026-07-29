@@ -124,7 +124,7 @@ export default function DataTable({
           })}
         </tbody>
         {footer && (
-          <tfoot>
+          <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2, boxShadow: '0 -2px 5px rgba(0,0,0,0.05)' }}>
             {footer}
           </tfoot>
         )}
