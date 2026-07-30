@@ -269,7 +269,7 @@ export default function Reports() {
         damageMap[d.item_id].total += toDisplayValue(d.quantity, d.inventory_items?.unit);
       });
 
-      const topDamaged = Object.values(damageMap).sort((a, b) => b.total - a.total).slice(0, 10);
+      const topDamaged = Object.values(damageMap).sort((a, b) => b.total - a.total);
       setDamagedItems(topDamaged);
     } catch (err) {
       console.error('Error loading damage report:', err);
@@ -351,7 +351,7 @@ export default function Reports() {
     >
       {/* ── Station Spend Chart (ALS only) ──────────────────────────────── */}
       {role === ROLES.ALS && (
-        <Card style={{ marginBottom: 'var(--space-6)' }}>
+        <Card style={{ marginBottom: 'var(--space-6)', flexShrink: 0 }}>
           <CardHeader
             title="Station-wise Monthly Spend"
             icon={<IndianRupee size={16} style={{ color: 'var(--color-success-500)' }} />}
@@ -379,21 +379,22 @@ export default function Reports() {
           <CardBody>
             <GroupLegend />
 
-            {/* Single shared scroll wrapper — chart + table move together */}
+            {/* Separate scroll wrappers for chart and table */}
             {(() => {
               const sharedW = Math.max(64 + stationSpend.length * 42 + 16, 480);
               return (
-                // Single horizontal scroll wraps both chart and table
-                <div style={{ overflowX: 'auto', marginTop: 8, paddingBottom: 8 }}>
-                  {/* SVG wrapper — explicit pixel width forces scroll container to expand */}
-                  <div style={{ width: sharedW, minWidth: sharedW }}>
-                    <StationSpendChart stationData={stationSpend} isLoading={isLoadingChart} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: 8 }}>
+                  {/* SVG wrapper with horizontal scroll */}
+                  <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
+                    <div style={{ width: sharedW, minWidth: sharedW }}>
+                      <StationSpendChart stationData={stationSpend} isLoading={isLoadingChart} />
+                    </div>
                   </div>
 
                   {stationSpend.length > 0 && !isLoadingChart && (
-                    // Table is separately vertically scrollable with sticky header
-                    <div style={{ width: sharedW, minWidth: sharedW, marginTop: 8, maxHeight: 280, overflowY: 'auto', border: '1px solid var(--color-gray-200)', borderRadius: 8 }}>
-                      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                    // Table wrapper with both vertical and horizontal scroll (responsive)
+                    <div style={{ width: '100%', maxHeight: 320, overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--color-gray-200)', borderRadius: 8 }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', minWidth: 500 }}>
                         <thead>
                           <tr style={{ background: 'var(--color-gray-100)', position: 'sticky', top: 0, zIndex: 2 }}>
                             <th style={{ padding: '7px 14px', textAlign: 'left', color: 'var(--color-gray-500)', fontWeight: 700, borderBottom: '2px solid var(--color-gray-200)', whiteSpace: 'nowrap', background: 'var(--color-gray-100)' }}>Station</th>
@@ -442,7 +443,7 @@ export default function Reports() {
       )}
 
       {/* ── Damaged Items ─────────────────────────────────────────────────── */}
-      <Card>
+      <Card style={{ flexShrink: 0 }}>
         <CardHeader
           title="High Replacement Risk (Frequently Damaged)"
           icon={<AlertTriangle size={16} style={{ color: 'var(--color-danger-500)' }} />}
