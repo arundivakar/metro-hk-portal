@@ -63,7 +63,7 @@ export default function AssetLifecycle() {
       let query = supabase.from('station_inventory')
         .select(`
           *,
-          inventory_items!inner ( name, unit, category, rate_master(brand, tender_year) ),
+          inventory_items!inner ( name, unit, category, rate_master(brand, tender_year, supplier) ),
           stations ( code, name )
         `)
         .eq('inventory_items.category', 'Consumable')
