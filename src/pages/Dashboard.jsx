@@ -596,6 +596,42 @@ function ALSDashboard() {
               emptyTitle="No verifications found"
               emptyDesc={`No digital stock verifications recorded for ${verificationsMonth}.`}
             />
+
+            {(() => {
+              const verifiedStationCodes = verifications.map(v => v.station);
+              const unverifiedStations = stations.filter(s => !verifiedStationCodes.includes(s.code));
+              
+              if (isLoading || loadingVerifications || stations.length === 0) return null;
+              
+              return (
+                <div style={{ marginTop: 'var(--space-6)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)' }}>
+                  <h4 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: 'var(--space-3)' }}>
+                    Stations Pending Verification ({unverifiedStations.length})
+                  </h4>
+                  {unverifiedStations.length === 0 ? (
+                    <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-success-600)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckCircle2 size={14} /> All stations have submitted verification for this period.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                      {unverifiedStations.map(s => (
+                        <div key={s.id} style={{ 
+                          background: 'var(--color-danger-50)', 
+                          color: 'var(--color-danger-700)',
+                          border: '1px solid var(--color-danger-200)',
+                          padding: '4px 8px',
+                          borderRadius: 'var(--radius-md)',
+                          fontSize: 'var(--font-size-xs)',
+                          fontWeight: 500
+                        }}>
+                          {s.code} - {s.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </CardBody>
         </Card>
       </div>
