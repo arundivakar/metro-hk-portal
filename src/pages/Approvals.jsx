@@ -52,9 +52,17 @@ export default function Approvals() {
 
       if (role === ROLES.SC) {
         query = query.eq('station_id', selectedStation?.id);
+        // NOTE: consumptionQuery is intentionally NOT filtered by station for SC.
+        // We use the SECURITY DEFINER RPC (fn_get_all_stations_spend) to get the
+        // true all-stations total, bypassing RLS. The local query gives station-specific cost.
       }
 
-      const [reqRes, consRes] = await Promise.all([fetchAll(query), fetchAll(consumptionQuery)]);
+      // For SC: also call RPC to get real all-stations total (bypasses RLS)
+      const rpcPromise = (role === ROLES.SC)
+        ? supabase.rpc('fn_get_all_stations_spend', { month_start: monthStart })
+        : Promise.resolve({ data: null, error: null });
+
+      const [reqRes, consRes, rpcRes] = await Promise.all([fetchAll(query), fetchAll(consumptionQuery), rpcPromise]);
       
       if (reqRes.error) throw reqRes.error;
       if (consRes.error) throw consRes.error;
@@ -95,11 +103,29 @@ export default function Approvals() {
         const rate = r.inventory_items?.rate_master?.unit_rate || 0;
         const nosPerKg = r.inventory_items?.rate_master?.nos_per_kg || null;
         const cost = toBillingQty(r.quantity_used, r.inventory_items?.unit, nosPerKg) * rate;
-        approved += cost;
+        
+        // For ALS, the local query already has full visibility, so use local sum for 'approved'
+        if (role === ROLES.ALS) {
+          approved += cost;
+        }
+        
+        // For SC, compute station-specific spend locally (RLS lets them see their station)
         if (selectedStation && r.stations?.code === selectedStation.code) {
           stationApproved += cost;
         }
       });
+
+      // For SC: use the RPC result for all-stations total (bypasses RLS).
+      // Falls back to stationApproved if the function doesn't exist yet.
+      if (role === ROLES.SC) {
+        if (rpcRes.data !== null && rpcRes.error === null) {
+          approved = Number(rpcRes.data);
+        } else {
+          // Fallback: function not deployed yet; show station spend as indicator
+          approved = stationApproved;
+          console.warn('fn_get_all_stations_spend not available, showing station spend instead:', rpcRes.error?.message);
+        }
+      }
 
       setExpenditure({ approved, stationApproved, pipeline });
     } catch (err) {
@@ -314,17 +340,22 @@ export default function Approvals() {
       {(role === ROLES.SC || role === ROLES.ALS) && (
         <Card style={{ marginBottom: 'var(--space-5)' }}>
           <CardBody style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center', padding: 'var(--space-4) var(--space-5)' }}>
+            {/* All-Stations Total: shown for both SC (via RPC) and ALS (via direct query) */}
             <div>
               <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>This Month's Spend (All Stations)</div>
               <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--color-primary-700)', marginTop: 2 }}>
                 ₹{expenditure.approved.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
-            {selectedStation && selectedStation.code !== 'ALL' && (
+
+            {/* Station-specific spend: shown for SC and for ALS when a specific station is selected */}
+            {(role === ROLES.SC || (role === ROLES.ALS && selectedStation && selectedStation.code !== 'ALL')) && (
               <>
                 <div style={{ width: 1, height: 36, background: 'var(--color-gray-200)' }} className="hide-on-mobile"></div>
                 <div>
-                  <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>{selectedStation.code} Spend</div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-gray-500)', fontWeight: 600 }}>
+                    {selectedStation?.code || ''} Spend
+                  </div>
                   <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--color-primary-700)', marginTop: 2 }}>
                     ₹{(expenditure.stationApproved || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
@@ -341,6 +372,7 @@ export default function Approvals() {
           </CardBody>
         </Card>
       )}
+
 
       <Card>
         <CardHeader title={`Requests (${requests.length})`} icon={<CheckSquare size={16} />} />
