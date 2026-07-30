@@ -56,7 +56,7 @@ export default function MonthlyBill() {
       // Fetch all consumption logs
       const logsQuery = supabase
         .from('consumption_logs')
-        .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg, tender_year)), stations(code)')
+        .select('*, inventory_items(name, unit, rate_master(brand, unit_rate, nos_per_kg, tender_year, supplier)), stations(code)')
         .gte('consumption_date', startDate)
         .lte('consumption_date', endDate);
       const { data: logsData, error: logsErr } = await fetchAll(logsQuery);
