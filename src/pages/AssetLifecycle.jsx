@@ -297,22 +297,30 @@ export default function AssetLifecycle() {
       key: 'actions', label: 'Actions',
       render: (_, r) => {
         const availableFroms = getAvailableFromStatuses(r);
-        if (availableFroms.length === 0) return <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--font-size-xs)' }}>No stock</span>;
+        const hasStock = r.quantity_in_use > 0 || r.quantity_damaged > 0 || r.quantity_disposed > 0;
         return (
-          <Button variant="outline" size="sm" onClick={() => { 
-            setSelected({ ...r, transitionFrom: availableFroms[0] }); 
-            setNewStatus(''); 
-            setUpdateQty(''); 
-            setRemarks(''); 
-            setError(''); 
-          }}>
-            Transition
-          </Button>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {availableFroms.length > 0 && (
+              <Button variant="outline" size="sm" onClick={() => { 
+                setSelected({ ...r, transitionFrom: availableFroms[0] }); 
+                setNewStatus(''); 
+                setUpdateQty(''); 
+                setRemarks(''); 
+                setError(''); 
+              }}>
+                Transition
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => handleOpenEditAsset(r)}
+              style={{ color: 'var(--color-primary-600)', borderColor: 'var(--color-primary-300)' }}>
+              <Pencil size={13} style={{ marginRight: 4 }} />Edit
+            </Button>
+          </div>
         );
       },
     }] : []),
     ...(role === ROLES.ALS ? [{
-      key: 'als_edit', label: 'Edit',
+      key: 'als_edit', label: 'Actions',
       render: (_, r) => (
         <Button variant="outline" size="sm" onClick={() => handleOpenEditAsset(r)}
           style={{ color: 'var(--color-primary-600)', borderColor: 'var(--color-primary-300)' }}>
@@ -570,7 +578,7 @@ export default function AssetLifecycle() {
         </Modal>
 
       {/* ALS: Edit Asset Quantities Modal */}
-      {role === ROLES.ALS && (
+      {(role === ROLES.ALS || role === ROLES.SC) && (
         <Modal
           isOpen={!!editAsset}
           onClose={() => setEditAsset(null)}
