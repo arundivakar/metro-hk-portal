@@ -116,6 +116,7 @@ export const NAV_ITEMS = {
     { path: '/assets', label: 'Asset Lifecycle', icon: 'Boxes' },
     { path: '/reports', label: 'Reports', icon: 'BarChart2' },
     { path: '/settings', label: 'Data Import', icon: 'Database' },
+    { path: '/business-continuity', label: 'Business Continuity', icon: 'ShieldCheck' },
   ],
 };
 

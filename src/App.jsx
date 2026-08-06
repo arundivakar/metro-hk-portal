@@ -22,6 +22,7 @@ import MonthlyBill from './pages/MonthlyBill';
 import NotFound from './pages/NotFound';
 import PrintChecklist from './pages/PrintChecklist';
 import DataInitialization from './pages/DataInitialization';
+import BusinessContinuity from './pages/BusinessContinuity';
 
 // Styles
 import './styles/index.css';
@@ -155,6 +156,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={[ROLES.ALS]}>
               <MonthlyBill />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/business-continuity"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.ALS]}>
+              <BusinessContinuity />
             </ProtectedRoute>
           }
         />
