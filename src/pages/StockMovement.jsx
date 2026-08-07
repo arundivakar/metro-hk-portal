@@ -196,6 +196,7 @@ export default function StockMovement() {
         consumption: fmtDisp(realConsumedDuringMonth),
         closing_stock: fmtDisp(closingStock > 0 ? closingStock : 0),
         closing_stock_raw: toDisp(closingStock > 0 ? closingStock : 0),
+        closing_stock_base: closingStock > 0 ? closingStock : 0,
         _zeroStock: closingStock <= 0,
         _visualOpeningStock: visualOpeningStock,
         _receiptsDuringMonth: receiptsDuringMonth,
@@ -249,12 +250,22 @@ export default function StockMovement() {
     setError('');
     const finalQty = parseFloat(formQty);
     if (!finalQty || finalQty <= 0) return setError('Enter a valid quantity.');
+    
+    // Add a small tolerance (0.01) for floating point imprecision when comparing
+    if (finalQty > (selectedItemForAction?.closing_stock_raw ?? 0) + 0.01) return setError('Not enough stock available.');
+
     // formQty is entered in display units (Ltr/Kg/Nos); convert to base (ml/g/Nos) for DB storage
     const dbUnit = selectedItemForAction?.dbUnit || selectedItemForAction?.unit || 'Nos';
-    const baseQty = (dbUnit === 'ml' || dbUnit === 'g' || dbUnit === 'Ltr' || dbUnit === 'Kg')
+    let baseQty = (dbUnit === 'ml' || dbUnit === 'g' || dbUnit === 'Ltr' || dbUnit === 'Kg')
       ? finalQty * 1000
       : finalQty;
-    if (finalQty > (selectedItemForAction?.closing_stock_raw ?? 0)) return setError('Not enough stock available.');
+
+    // If consuming everything but there's a floating point mismatch (e.g. they enter 1, but db has 0.999),
+    // cap it to exactly what is in the DB to avoid throwing the negative stock constraint.
+    const exactDbStock = selectedItemForAction?.closing_stock_base ?? 0;
+    if (baseQty > exactDbStock && baseQty <= exactDbStock + 10) {
+      baseQty = exactDbStock;
+    }
 
     setSubmitting(true);
     try {
