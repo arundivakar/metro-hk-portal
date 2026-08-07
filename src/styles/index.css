@@ -268,3 +268,14 @@ button {
   background: var(--color-primary-100);
   color: var(--color-primary-800);
 }
+
+/* Remove arrows/spinners from number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
