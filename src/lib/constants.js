@@ -42,18 +42,21 @@ export const ASSET_STATUS = {
   IN_USE: 'in_use',
   PARTIALLY_DAMAGED: 'partially_damaged',
   DISPOSED: 'disposed',
+  SCRAPPED: 'scrapped',
 };
 
 export const ASSET_STATUS_LABELS = {
   in_use: 'In Good Condition (In Use)',
   partially_damaged: 'Partially Damaged (Usable)',
   disposed: 'Disposed (Unusable)',
+  scrapped: 'Moved to Scrap (Removed)',
 };
 
 export const ASSET_STATUS_COLORS = {
   in_use: 'success',
   partially_damaged: 'warning',
   disposed: 'danger',
+  scrapped: 'neutral',
 };
 
 // Stage 1 (Not Used) = station_inventory.current_stock

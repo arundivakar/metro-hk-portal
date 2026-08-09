@@ -50,6 +50,7 @@ export default function AssetLifecycle() {
     in_use: assets.reduce((sum, a) => sum + ((role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_in_use || 0) : 0), 0),
     partially_damaged: assets.reduce((sum, a) => sum + ((role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_damaged || 0) : 0), 0),
     disposed: assets.reduce((sum, a) => sum + ((role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_disposed || 0) : 0), 0),
+    scrapped: assets.reduce((sum, a) => sum + ((role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_scrapped || 0) : 0), 0),
   };
 
   useEffect(() => { 
@@ -216,6 +217,7 @@ export default function AssetLifecycle() {
       in_use:   String(row.quantity_in_use   ?? 0),
       damaged:  String(row.quantity_damaged  ?? 0),
       disposed: String(row.quantity_disposed ?? 0),
+      scrapped: String(row.quantity_scrapped ?? 0),
       remarks: '',
     });
     setError('');
@@ -225,7 +227,8 @@ export default function AssetLifecycle() {
     const inUse   = parseInt(editAssetForm.in_use,   10);
     const damaged  = parseInt(editAssetForm.damaged,  10);
     const disposed = parseInt(editAssetForm.disposed, 10);
-    if ([inUse, damaged, disposed].some(v => isNaN(v) || v < 0)) {
+    const scrapped = parseInt(editAssetForm.scrapped, 10);
+    if ([inUse, damaged, disposed, scrapped].some(v => isNaN(v) || v < 0)) {
       setError('All quantities must be 0 or a positive whole number.');
       return;
     }
@@ -242,6 +245,7 @@ export default function AssetLifecycle() {
         p_in_use:      inUse,
         p_damaged:     damaged,
         p_disposed:    disposed,
+        p_scrapped:    scrapped,
         p_remarks:     editAssetForm.remarks.trim(),
         p_user_id:     profile?.id ?? null,
       });
@@ -260,12 +264,14 @@ export default function AssetLifecycle() {
     const froms = [];
     if (row.quantity_in_use > 0) froms.push(ASSET_STATUS.IN_USE);
     if (row.quantity_damaged > 0) froms.push(ASSET_STATUS.PARTIALLY_DAMAGED);
+    if (row.quantity_disposed > 0) froms.push(ASSET_STATUS.DISPOSED);
     return froms;
   };
 
   const getNextStatuses = (fromStatus) => {
     if (fromStatus === ASSET_STATUS.IN_USE) return [ASSET_STATUS.PARTIALLY_DAMAGED, ASSET_STATUS.DISPOSED];
     if (fromStatus === ASSET_STATUS.PARTIALLY_DAMAGED) return [ASSET_STATUS.DISPOSED];
+    if (fromStatus === ASSET_STATUS.DISPOSED) return [ASSET_STATUS.SCRAPPED];
     return [];
   };
 
@@ -274,7 +280,8 @@ export default function AssetLifecycle() {
     .filter((a) => statusFilter === 'All' || 
       (statusFilter === ASSET_STATUS.IN_USE && a.quantity_in_use > 0) ||
       (statusFilter === ASSET_STATUS.PARTIALLY_DAMAGED && a.quantity_damaged > 0) ||
-      (statusFilter === ASSET_STATUS.DISPOSED && a.quantity_disposed > 0)
+      (statusFilter === ASSET_STATUS.DISPOSED && a.quantity_disposed > 0) ||
+      (statusFilter === ASSET_STATUS.SCRAPPED && a.quantity_scrapped > 0)
     )
     .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || alsStation === 'All' || a.stations?.code === alsStation)
     .filter((a) => !search || (a.inventory_items?.name || '').toLowerCase().includes(search.toLowerCase()));
@@ -293,6 +300,7 @@ export default function AssetLifecycle() {
     { key: 'in_good_condition', label: 'In Good Condition (In Use)', render: (_, r) => `${Number(r.quantity_in_use || 0)} ${r.inventory_items?.unit ?? ''}` },
     { key: 'partially_damaged', label: 'Partially Damaged (Usable)', render: (_, r) => `${Number(r.quantity_damaged || 0)} ${r.inventory_items?.unit ?? ''}` },
     { key: 'disposed', label: 'Disposed (Unusable)', render: (_, r) => `${Number(r.quantity_disposed || 0)} ${r.inventory_items?.unit ?? ''}` },
+    { key: 'scrapped', label: 'Scrapped (Removed)', render: (_, r) => <span style={{ color: 'var(--color-gray-500)' }}>{Number(r.quantity_scrapped || 0)} {r.inventory_items?.unit ?? ''}</span> },
     ...(role === ROLES.SC ? [{
       key: 'actions', label: 'Actions',
       render: (_, r) => {
