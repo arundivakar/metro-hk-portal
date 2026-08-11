@@ -43,6 +43,7 @@ export default function PrintChecklist() {
   const [empId, setEmpId]           = useState('');
   const [draftId, setDraftId]       = useState(null);
   const [resumeBanner, setResumeBanner] = useState(null);
+  const [lastVerification, setLastVerification] = useState(null);
   const [isSaving, setIsSaving]     = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const sigCanvas  = useRef(null);
@@ -132,6 +133,18 @@ export default function PrintChecklist() {
   }, [selectedStation]);
 
   // ── Check for existing draft ──────────────────────────────────────────────
+  const fetchLastVerification = useCallback(async () => {
+    if (!selectedStation) return;
+    const { data } = await supabase
+      .from('stock_verifications')
+      .select('*')
+      .eq('station_id', selectedStation.id)
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setLastVerification(data || null);
+  }, [selectedStation]);
+
   const checkDraft = useCallback(async () => {
     if (!selectedStation) return;
     const { data: draft } = await supabase
@@ -145,8 +158,8 @@ export default function PrintChecklist() {
 
   useEffect(() => {
     if (!selectedStation) { setError('No station selected.'); setIsLoading(false); return; }
-    Promise.all([fetchData(), checkDraft()]);
-  }, [selectedStation, fetchData, checkDraft]);
+    Promise.all([fetchData(), checkDraft(), fetchLastVerification()]);
+  }, [selectedStation, fetchData, checkDraft, fetchLastVerification]);
 
   // ── Resume draft ──────────────────────────────────────────────────────────
   const resumeDraft = (draft) => {
@@ -480,6 +493,19 @@ export default function PrintChecklist() {
           })}
         </div>
       </div>
+
+      {/* ── Last Verification Banner ── */}
+      {lastVerification && (
+        <div style={{ background: lastVerification.verification_period === periodInfo.period ? '#fff3cd' : '#e8f5e9', borderBottom: '2px solid ' + (lastVerification.verification_period === periodInfo.period ? '#ffecb5' : '#4caf50'), padding: '0.65rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+          <div style={{ fontSize: '0.82rem', color: lastVerification.verification_period === periodInfo.period ? '#856404' : '#2e7d32' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              {lastVerification.verification_period === periodInfo.period ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+              <strong>{lastVerification.verification_period === periodInfo.period ? 'Warning: You already verified this period' : 'Last Verification:'}</strong>
+            </span>
+            <div style={{ marginTop: '2px' }}>Completed on {formatDate(lastVerification.completed_at)} for {lastVerification.verification_period} by {lastVerification.verifier_name} (EMP: {lastVerification.emp_id})</div>
+          </div>
+        </div>
+      )}
 
       {/* ── Resume Banner ── */}
       {resumeBanner && (
