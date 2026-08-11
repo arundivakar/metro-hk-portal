@@ -308,21 +308,25 @@ export default function AssetLifecycle() {
         const hasStock = r.quantity_in_use > 0 || r.quantity_damaged > 0 || r.quantity_disposed > 0;
         return (
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            {availableFroms.length > 0 && (
-              <Button variant="outline" size="sm" onClick={() => { 
-                setSelected({ ...r, transitionFrom: availableFroms[0] }); 
-                setNewStatus(''); 
-                setUpdateQty(''); 
-                setRemarks(''); 
-                setError(''); 
-              }}>
-                Transition
+            <div style={{ width: '85px' }}>
+              {availableFroms.length > 0 && (
+                <Button variant="outline" size="sm" style={{ width: '100%' }} onClick={() => { 
+                  setSelected({ ...r, transitionFrom: availableFroms[0] }); 
+                  setNewStatus(''); 
+                  setUpdateQty(''); 
+                  setRemarks(''); 
+                  setError(''); 
+                }}>
+                  Transition
+                </Button>
+              )}
+            </div>
+            <div style={{ width: '70px' }}>
+              <Button variant="outline" size="sm" onClick={() => handleOpenEditAsset(r)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary-600)', borderColor: 'var(--color-primary-300)' }}>
+                <Pencil size={13} style={{ marginRight: 4 }} />Edit
               </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => handleOpenEditAsset(r)}
-              style={{ color: 'var(--color-primary-600)', borderColor: 'var(--color-primary-300)' }}>
-              <Pencil size={13} style={{ marginRight: 4 }} />Edit
-            </Button>
+            </div>
           </div>
         );
       },
