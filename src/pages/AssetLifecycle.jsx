@@ -28,6 +28,7 @@ export default function AssetLifecycle() {
   const [newStatus, setNewStatus] = useState('');
   const [updateQty, setUpdateQty] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [transitionDate, setTransitionDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
 
   // Editing History state
   const [editingLog, setEditingLog] = useState(null);
@@ -151,7 +152,8 @@ export default function AssetLifecycle() {
         p_to_status: newStatus,
         p_quantity: qty,
         p_remarks: remarks || null,
-        p_user_id: profile.id
+        p_user_id: profile.id,
+        p_transition_date: transitionDate || null
       });
       if (err) throw err;
       
@@ -171,7 +173,8 @@ export default function AssetLifecycle() {
     setEditingLog(log);
     setEditLogForm({
       quantity: log.quantity,
-      remarks: log.remarks || ''
+      remarks: log.remarks || '',
+      transition_date: log.transition_date || new Date().toISOString().slice(0, 10)
     });
     setError('');
   };
@@ -184,7 +187,8 @@ export default function AssetLifecycle() {
       const { error: err } = await supabase.rpc('fn_edit_asset_log', {
         p_log_id: editingLog.id,
         p_new_quantity: parseFloat(editLogForm.quantity),
-        p_remarks: editLogForm.remarks || null
+        p_remarks: editLogForm.remarks || null,
+        p_transition_date: editLogForm.transition_date || null
       });
       if (err) throw err;
       toast.success('Transition log updated!');
@@ -343,7 +347,8 @@ export default function AssetLifecycle() {
   ];
 
   const historyColumns = [
-    { key: 'created_at', label: 'Date', render: (v) => formatDate(v) },
+    { key: 'transition_date', label: 'Transition Date', render: (v, r) => v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : formatDate(r.created_at) },
+    { key: 'created_at', label: 'Logged On', render: (v) => formatDate(v) },
     ...((role === ROLES.ALS || role === ROLES.HKTL) ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
     { key: 'item', label: 'Cleaning Material', render: (_, r) => r.inventory_items?.name ?? '—' },
     { key: 'quantity', label: 'Quantity', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
@@ -540,6 +545,15 @@ export default function AssetLifecycle() {
             </div>
 
             <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="asset-date">Date of Transition</label>
+              <input id="asset-date" type="date" className="form-control"
+                value={transitionDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setTransitionDate(e.target.value)} required />
+              <small style={{ color: 'var(--color-text-muted)' }}>When did this status change actually occur?</small>
+            </div>
+
+            <div className="form-group">
               <label className="form-label" htmlFor="asset-remarks">Remarks</label>
               <textarea id="asset-remarks" className="form-control" rows={3}
                 value={remarks} onChange={(e) => setRemarks(e.target.value)}
@@ -578,6 +592,14 @@ export default function AssetLifecycle() {
               <input id="el-qty" type="number" min="0.001" step="any" className="form-control"
                 value={editLogForm.quantity} onChange={(e) => setEditLogForm(f => ({ ...f, quantity: e.target.value }))} required />
               <small style={{ color: 'var(--color-text-muted)' }}>Changing this will automatically adjust the stock buckets.</small>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="el-date">Date of Transition</label>
+              <input id="el-date" type="date" className="form-control"
+                value={editLogForm.transition_date || ''}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setEditLogForm(f => ({ ...f, transition_date: e.target.value }))} />
             </div>
 
             <div className="form-group">
