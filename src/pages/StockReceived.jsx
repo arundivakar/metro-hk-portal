@@ -442,10 +442,10 @@ export default function StockReceived() {
     { key: 'source_station', label: 'Received From', render: (_, row) => {
         if (row.source_station_id) {
           const srcStation = stations.find(s => s.id === row.source_station_id);
-          return srcStation ? `${srcStation.code}` : 'Other Station';
+          return srcStation ? `${srcStation.code} — ${srcStation.name}` : 'Other Station';
         }
         if (row.supplier === 'DEPOT') return '🏭 Depot';
-        return row.supplier || 'KDS';
+        return 'Main Store KDS';
     }},
     { key: 'invoice_number', label: 'Invoice #', render: (v) => v ?? '—' },
     { key: 'received_by', label: 'Received By', render: (_, row) => row.users_profile?.full_name ?? '—' },
