@@ -153,7 +153,7 @@ export default function StockReceived() {
       return;
     }
 
-    const isTransfer = !!form.source_station_id;
+    const isTransfer = !!form.source_station_id && form.source_station_id !== 'DEPOT';
     const baseQty = toBaseValue(parseFloat(form.quantity), selectedItem?.unit || 'Nos');
 
     // Guard: quantity must be a positive number
@@ -195,7 +195,7 @@ export default function StockReceived() {
         });
         if (rpcErr) throw new Error(rpcErr.message);
       } else {
-        // Normal KDS / external supplier receipt — unchanged
+        // Normal KDS / Depot receipt
         await addStockReceived({
           station_id:        selectedStation.id,
           item_id:           form.item_id,
@@ -203,7 +203,7 @@ export default function StockReceived() {
           received_date:     form.received_date,
           invoice_number:    form.invoice_number || null,
           source_station_id: null,
-          supplier:          form.supplier || 'KDS',
+          supplier:          form.source_station_id === 'DEPOT' ? 'DEPOT' : (selectedItem?.rate_master?.supplier || 'KDS'),
           unit_rate:         form.unit_rate ? parseFloat(form.unit_rate) : null,
           remarks:           form.remarks || null,
           received_by:       profile.id,
@@ -445,6 +445,10 @@ export default function StockReceived() {
           return srcStation ? `${srcStation.code} — ${srcStation.name}` : 'Other Station';
         }
         if (row.supplier === 'DEPOT') return '🏭 Depot';
+        const legacyStation = stations.find(s => s.code.toLowerCase() === row.supplier?.trim().toLowerCase());
+        if (legacyStation) {
+          return `${legacyStation.code} — ${legacyStation.name}`;
+        }
         return 'Main Store KDS';
     }},
     { key: 'invoice_number', label: 'Invoice #', render: (v) => v ?? '—' },
@@ -587,51 +591,48 @@ export default function StockReceived() {
                 value={form.unit_rate} onChange={(e) => setForm((f) => ({ ...f, unit_rate: e.target.value }))} />
             </div>
           </div>
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label form-label-required" htmlFor="sr-source">Received From (Source)</label>
-              <select id="sr-source" className="form-control" value={form.source_station_id}
-                onChange={(e) => setForm(f => ({ ...f, source_station_id: e.target.value, supplier: e.target.value === '' ? (selectedItem?.rate_master?.supplier || 'KDS') : e.target.value === 'DEPOT' ? 'DEPOT' : '', quantity: '' }))}>
-                <option value="">Main Store (KDS / Supplier)</option>
-                <option value="DEPOT">🏭 Depot</option>
-                <optgroup label="Inter-Station Transfer">
-                  {availableSourceStations.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.code} — {s.name}
-                      {form.item_id && stationStockMap[s.id] !== undefined ? ` (${(() => {
-                        const unit = selectedItem?.unit || 'Nos';
-                        const dispUnit = getDisplayUnit(unit);
-                        const dispVal = toDisplayValue(stationStockMap[s.id] || 0, unit);
-                        return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
-                      })()})` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-            </div>
-            {(form.source_station_id === '' || form.source_station_id === 'DEPOT') && (
-              <div className="form-group">
-                <label className="form-label" htmlFor="sr-supplier">External Supplier Name</label>
-                <input id="sr-supplier" type="text" className="form-control" placeholder="Optional"
-                  value={form.supplier} onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))} />
-              </div>
-            )}
-            {/* Stock transfer stock-info alert: only for inter-station, not DEPOT */}
-            {form.source_station_id && form.source_station_id !== 'DEPOT' && selectedItem && (() => {
+          <div className="form-group">
+            <label className="form-label form-label-required" htmlFor="sr-source">Received From (Source)</label>
+            <select id="sr-source" className="form-control" value={form.source_station_id}
+              onChange={(e) => setForm(f => ({ 
+                ...f, 
+                source_station_id: e.target.value, 
+                supplier: e.target.value === 'DEPOT' ? 'DEPOT' : (selectedItem?.rate_master?.supplier || 'KDS'), 
+                quantity: '' 
+              }))}>
+              <option value="">Main Store KDS</option>
+              <option value="DEPOT">🏭 Depot</option>
+              <optgroup label="Inter-Station Transfer (Transfers from other station)">
+                {availableSourceStations.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} — {s.name}
+                    {form.item_id && stationStockMap[s.id] !== undefined ? ` (${(() => {
+                      const unit = selectedItem?.unit || 'Nos';
+                      const dispUnit = getDisplayUnit(unit);
+                      const dispVal = toDisplayValue(stationStockMap[s.id] || 0, unit);
+                      return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+                    })()})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+          {/* Stock transfer stock-info alert: only for inter-station, not DEPOT */}
+          {form.source_station_id && form.source_station_id !== 'DEPOT' && selectedItem && (() => {
             const unit = selectedItem.unit || 'Nos';
             const dispUnit = getDisplayUnit(unit);
             const raw = stationStockMap[form.source_station_id] || 0;
             const dispVal = toDisplayValue(raw, unit);
             const formatted = dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+            const srcStation = stations.find(s => s.id === form.source_station_id);
             return (
               <Alert variant={raw > 0 ? 'info' : 'danger'} style={{ marginBottom: 'var(--space-3)' }}>
                 {raw > 0
-                  ? `✓ Available at source: ${formatted}`
+                  ? `✓ Available at ${srcStation?.code || 'source station'}: ${formatted} (This will be automatically deducted from ${srcStation?.code || 'source station'})`
                   : `⚠ No stock available at selected source station for this item.`}
               </Alert>
             );
           })()}
-          </div>
           {selectedItem && form.quantity && form.unit_rate && (
             <Alert variant="info" style={{ marginBottom: 'var(--space-3)' }}>
             Total Value: ₹{(
@@ -780,6 +781,16 @@ export default function StockReceived() {
             <div style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-600)' }}>
               <p><strong>Item:</strong> {editingLog.inventory_items?.name}</p>
               <p><strong>Original Quantity:</strong> {editingLog.quantity}</p>
+              <p>
+                <strong>Received From:</strong>{' '}
+                {editingLog.source_station_id 
+                  ? (stations.find(s => s.id === editingLog.source_station_id) 
+                      ? `${stations.find(s => s.id === editingLog.source_station_id).code} — ${stations.find(s => s.id === editingLog.source_station_id).name}` 
+                      : 'Station Transfer')
+                  : editingLog.supplier === 'DEPOT' 
+                    ? '🏭 Depot' 
+                    : 'Main Store KDS'}
+              </p>
             </div>
             <div className="form-group">
               <label className="form-label form-label-required" htmlFor="el-qty">New Quantity</label>
@@ -791,14 +802,6 @@ export default function StockReceived() {
               <input id="el-date" type="date" className="form-control"
                 value={editForm.received_date} onChange={(e) => setEditForm(f => ({ ...f, received_date: e.target.value }))} required />
             </div>
-            {(!editingLog.source_station_id) && (
-              <div className="form-group">
-                <label className="form-label form-label-required" htmlFor="el-supplier">Received From</label>
-                <input id="el-supplier" type="text" className="form-control"
-                  value={editForm.supplier} onChange={(e) => setEditForm(f => ({ ...f, supplier: e.target.value }))} required />
-                <small style={{ color: 'var(--color-gray-500)' }}>e.g. KDS, KLMT, AATK, or Vendor Name</small>
-              </div>
-            )}
             <div className="form-group">
               <label className="form-label" htmlFor="el-remarks">Remarks</label>
               <textarea id="el-remarks" className="form-control" rows={2}
