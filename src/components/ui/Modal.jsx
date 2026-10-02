@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
  * @param {string} title
  * @param {string} size - sm | md | lg
  */
-export default function Modal({ isOpen, onClose, title, size = 'md', children, footer }) {
+export default function Modal({ isOpen, onClose, title, subtitle, icon: Icon, size = 'md', children, footer }) {
   const backdropRef = useRef(null);
 
   // Close on Escape key
@@ -44,7 +44,21 @@ export default function Modal({ isOpen, onClose, title, size = 'md', children, f
     <div className="modal-backdrop" ref={backdropRef} onClick={handleBackdropClick}>
       <div className={`modal ${sizeClass}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
-          <h2 className="modal-title" id="modal-title">{title}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+            {Icon && (
+              <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-50)', border: '1px solid var(--color-primary-100)', color: 'var(--color-primary-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={19} />
+              </div>
+            )}
+            <div>
+              <h2 className="modal-title" id="modal-title">{title}</h2>
+              {subtitle && (
+                <p style={{ fontSize: '12px', color: 'var(--color-gray-500)', marginTop: '2px', fontWeight: 400, lineHeight: 1.3 }}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
+          </div>
           <button className="modal-close" onClick={onClose} aria-label="Close modal">
             <X size={18} />
           </button>
