@@ -38,7 +38,7 @@ export default function Modal({ isOpen, onClose, title, size = 'md', children, f
     if (e.target === backdropRef.current) onClose?.();
   };
 
-  const sizeClass = size === 'lg' ? 'modal-lg' : size === 'sm' ? 'modal-sm' : '';
+  const sizeClass = size === 'xl' ? 'modal-xl' : size === 'lg' ? 'modal-lg' : size === 'sm' ? 'modal-sm' : '';
 
   return createPortal(
     <div className="modal-backdrop" ref={backdropRef} onClick={handleBackdropClick}>

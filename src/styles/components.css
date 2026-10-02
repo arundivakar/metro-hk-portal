@@ -401,6 +401,7 @@
   border: 1px solid var(--color-gray-200);
 }
 
+.modal-xl { max-width: 980px; }
 .modal-lg { max-width: 740px; }
 .modal-sm { max-width: 400px; }
 

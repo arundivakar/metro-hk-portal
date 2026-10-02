@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PackagePlus, Plus, Pencil, Trash2 } from 'lucide-react';
+import { PackagePlus, Plus, Pencil, Trash2, ArrowLeftRight } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -45,13 +45,31 @@ export default function StockReceived() {
   const [alsStation, setAlsStation] = useState('All');
   const [allLogs, setAllLogs] = useState([]);
 
-  const [form, setForm] = useState({
+  // Helper to create a new blank row for multi-item batch entry
+  const createBlankBatchRow = () => ({
+    id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+    item_id: '',
+    quantity: '',
+    unit_rate: '',
+    remarks: '',
+  });
+
+  // Batch Stock Received state (entered once for the entire batch)
+  const [batchHeader, setBatchHeader] = useState({
+    received_date: today,
+    source: 'KDS', // 'KDS' for Main Store KDS, 'DEPOT' for Depot
+    invoice_number: '',
+    remarks: '',
+  });
+  const [batchItems, setBatchItems] = useState([createBlankBatchRow()]);
+
+  // Dedicated Inter-Station Transfer (IST) state
+  const [showIstForm, setShowIstForm] = useState(false);
+  const [istForm, setIstForm] = useState({
     item_id: '',
     quantity: '',
     received_date: today,
-    invoice_number: '',
-    source_station_id: '', // New field for Inter-station transfers
-    supplier: '', // Fallback or KDS supplier name
+    source_station_id: '',
     unit_rate: '',
     remarks: '',
   });
@@ -145,79 +163,206 @@ export default function StockReceived() {
     }
   };
 
-  const handleSubmit = async (e) => {
+  // Batch Entry Row Handlers
+  const handleAddBatchRow = () => {
+    setBatchItems(prev => [...prev, createBlankBatchRow()]);
+  };
+
+  const handleRemoveBatchRow = (rowId) => {
+    setBatchItems(prev => {
+      if (prev.length <= 1) {
+        return [createBlankBatchRow()];
+      }
+      return prev.filter(r => r.id !== rowId);
+    });
+  };
+
+  const handleBatchItemChange = (rowId, itemId) => {
+    const item = items.find(i => i.id === itemId);
+    setBatchItems(prev => prev.map(row => {
+      if (row.id !== rowId) return row;
+      return {
+        ...row,
+        item_id: itemId,
+        unit_rate: item?.rate_master?.unit_rate ?? '',
+      };
+    }));
+  };
+
+  const handleBatchFieldChange = (rowId, field, value) => {
+    setBatchItems(prev => prev.map(row => {
+      if (row.id !== rowId) return row;
+      return { ...row, [field]: value };
+    }));
+  };
+
+  const validateBatch = () => {
+    if (!batchHeader.received_date) {
+      return 'Received Date is required.';
+    }
+
+    if (!batchItems || batchItems.length === 0) {
+      return 'Please add at least one item.';
+    }
+
+    for (let i = 0; i < batchItems.length; i++) {
+      const row = batchItems[i];
+      const rowNum = i + 1;
+
+      if (!row.item_id) {
+        return `Row ${rowNum}: Please select an item.`;
+      }
+
+      const qty = parseFloat(row.quantity);
+      if (!row.quantity || isNaN(qty) || qty <= 0) {
+        const selected = items.find(item => item.id === row.item_id);
+        return `Row ${rowNum} (${selected?.name || 'Item'}): Please enter a valid quantity greater than zero.`;
+      }
+
+      if (row.unit_rate !== '' && (isNaN(parseFloat(row.unit_rate)) || parseFloat(row.unit_rate) < 0)) {
+        return `Row ${rowNum}: Unit rate must be zero or positive.`;
+      }
+    }
+
+    // Check for duplicate items in the same batch
+    const seen = new Set();
+    for (let i = 0; i < batchItems.length; i++) {
+      if (seen.has(batchItems[i].item_id)) {
+        const dupItem = items.find(it => it.id === batchItems[i].item_id);
+        return `Duplicate item detected: "${dupItem?.name || 'Item'}" appears more than once. Please combine quantities into a single row.`;
+      }
+      seen.add(batchItems[i].item_id);
+    }
+
+    return null;
+  };
+
+  const totalBatchValue = batchItems.reduce((sum, row) => {
+    const item = items.find(i => i.id === row.item_id);
+    if (!item || !row.quantity || !row.unit_rate) return sum;
+    const qty = parseFloat(row.quantity) || 0;
+    const rate = parseFloat(row.unit_rate) || 0;
+    const baseQty = toBaseValue(qty, item.unit || 'Nos');
+    const billingQty = toBillingQty(baseQty, item.unit || 'Nos', item.rate_master?.nos_per_kg);
+    return sum + (billingQty * rate);
+  }, 0);
+
+  const handleBatchSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.item_id || !form.quantity || !form.received_date) {
-      setError('Item, quantity and date are required.');
+
+    const validationErr = validateBatch();
+    if (validationErr) {
+      setError(validationErr);
       return;
-    }
-
-    const isTransfer = !!form.source_station_id && form.source_station_id !== 'DEPOT';
-    const baseQty = toBaseValue(parseFloat(form.quantity), selectedItem?.unit || 'Nos');
-
-    // Guard: quantity must be a positive number
-    if (!form.quantity || parseFloat(form.quantity) <= 0 || isNaN(parseFloat(form.quantity))) {
-      setError('Quantity must be a positive number greater than zero.');
-      return;
-    }
-
-    // Validate stock availability for inter-station transfer
-    if (isTransfer) {
-      const srcAvail = stationStockMap[form.source_station_id] || 0;
-      if (baseQty > srcAvail) {
-        const dispUnit = getDisplayUnit(selectedItem?.unit || 'Nos');
-        const availDisp = toDisplayValue(srcAvail, selectedItem?.unit || 'Nos');
-        const availFmt = dispUnit === 'Nos'
-          ? `${Math.round(availDisp)} Nos`
-          : `${availDisp.toFixed(2)} ${dispUnit}`;
-        setError(`Insufficient stock at source station. Available: ${availFmt}`);
-        return;
-      }
     }
 
     setSubmitting(true);
     try {
-      if (isTransfer) {
-        // Inter-station transfer: use the atomic SECURITY DEFINER RPC.
-        // This single call handles BOTH the destination receipt AND the source deduction
-        // inside one Postgres transaction, bypassing RLS for cross-station writes.
-        const { error: rpcErr } = await supabase.rpc('fn_inter_station_transfer', {
-          p_source_station_id: form.source_station_id,
-          p_dest_station_id:   selectedStation.id,
-          p_item_id:           form.item_id,
-          p_quantity:          baseQty,
-          p_transfer_date:     form.received_date,
-          p_dest_station_code: selectedStation.code,
-          p_logged_by:         profile.id,
-          p_remarks:           form.remarks || null,
-          p_unit_rate:         form.unit_rate ? parseFloat(form.unit_rate) : null,
-        });
-        if (rpcErr) throw new Error(rpcErr.message);
-      } else {
-        // Normal KDS / Depot receipt
-        await addStockReceived({
+      const payloadArray = batchItems.map(row => {
+        const item = items.find(i => i.id === row.item_id);
+        const baseQty = toBaseValue(parseFloat(row.quantity), item?.unit || 'Nos');
+        return {
           station_id:        selectedStation.id,
-          item_id:           form.item_id,
+          item_id:           row.item_id,
           quantity:          baseQty,
-          received_date:     form.received_date,
-          invoice_number:    form.invoice_number || null,
+          received_date:     batchHeader.received_date,
+          invoice_number:    batchHeader.invoice_number?.trim() || null,
           source_station_id: null,
-          supplier:          form.source_station_id === 'DEPOT' ? 'DEPOT' : (selectedItem?.rate_master?.supplier || 'KDS'),
-          unit_rate:         form.unit_rate ? parseFloat(form.unit_rate) : null,
-          remarks:           form.remarks || null,
+          supplier:          batchHeader.source === 'DEPOT' ? 'DEPOT' : (item?.rate_master?.supplier || 'KDS'),
+          unit_rate:         row.unit_rate !== '' && !isNaN(parseFloat(row.unit_rate)) ? parseFloat(row.unit_rate) : null,
+          remarks:           [batchHeader.remarks?.trim(), row.remarks?.trim()].filter(Boolean).join(' - ') || null,
           received_by:       profile.id,
-        });
-      }
+        };
+      });
 
-      toast.success(isTransfer ? 'Inter-station transfer completed!' : 'Stock received entry added successfully!');
+      await bulkAddStockReceived(payloadArray);
+
+      toast.success(`Successfully saved ${payloadArray.length} stock received ${payloadArray.length === 1 ? 'item' : 'items'}!`);
       setShowForm(false);
-      const resetForm = { item_id: '', quantity: '', received_date: today, invoice_number: '', source_station_id: '', supplier: '', unit_rate: '', remarks: '' };
-      setForm(resetForm);
+      setBatchHeader({ received_date: today, source: 'KDS', invoice_number: '', remarks: '' });
+      setBatchItems([createBlankBatchRow()]);
+      loadData();
+    } catch (err) {
+      setError('Failed to save entries: ' + (err.message || 'Unknown error'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Dedicated Inter-Station Transfer handlers
+  const handleIstItemChange = async (val) => {
+    const item = items.find((i) => i.id === val);
+    setIstForm((f) => ({ 
+      ...f, 
+      item_id: val, 
+      unit_rate: item?.rate_master?.unit_rate ?? '', 
+      source_station_id: '', 
+      quantity: '' 
+    }));
+    if (val) {
+      const { data } = await supabase
+        .from('v_station_inventory_summary')
+        .select('station_id, current_stock')
+        .eq('item_id', val);
+      const map = {};
+      (data || []).forEach(r => { map[r.station_id] = Number(r.current_stock || 0); });
+      setStationStockMap(map);
+    } else {
+      setStationStockMap({});
+    }
+  };
+
+  const handleIstSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!istForm.item_id || !istForm.quantity || !istForm.received_date || !istForm.source_station_id) {
+      setError('Item, source station, quantity, and date are required.');
+      return;
+    }
+
+    const selectedIstItem = items.find(i => i.id === istForm.item_id);
+    const baseQty = toBaseValue(parseFloat(istForm.quantity), selectedIstItem?.unit || 'Nos');
+
+    if (!istForm.quantity || parseFloat(istForm.quantity) <= 0 || isNaN(parseFloat(istForm.quantity))) {
+      setError('Quantity must be a positive number greater than zero.');
+      return;
+    }
+
+    const srcAvail = stationStockMap[istForm.source_station_id] || 0;
+    if (baseQty > srcAvail) {
+      const dispUnit = getDisplayUnit(selectedIstItem?.unit || 'Nos');
+      const availDisp = toDisplayValue(srcAvail, selectedIstItem?.unit || 'Nos');
+      const availFmt = dispUnit === 'Nos'
+        ? `${Math.round(availDisp)} Nos`
+        : `${availDisp.toFixed(2)} ${dispUnit}`;
+      setError(`Insufficient stock at source station. Available: ${availFmt}`);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { error: rpcErr } = await supabase.rpc('fn_inter_station_transfer', {
+        p_source_station_id: istForm.source_station_id,
+        p_dest_station_id:   selectedStation.id,
+        p_item_id:           istForm.item_id,
+        p_quantity:          baseQty,
+        p_transfer_date:     istForm.received_date,
+        p_dest_station_code: selectedStation.code,
+        p_logged_by:         profile.id,
+        p_remarks:           istForm.remarks || null,
+        p_unit_rate:         istForm.unit_rate ? parseFloat(istForm.unit_rate) : null,
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
+
+      toast.success('Inter-station transfer completed!');
+      setShowIstForm(false);
+      setIstForm({ item_id: '', quantity: '', received_date: today, source_station_id: '', unit_rate: '', remarks: '' });
       setStationStockMap({});
       loadData();
     } catch (err) {
-      setError(err.message.includes('Insufficient') ? err.message : 'Failed to save entry: ' + err.message);
+      setError(err.message.includes('Insufficient') ? err.message : 'Transfer failed: ' + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -299,31 +444,6 @@ export default function StockReceived() {
     }
   };
 
-  const selectedItem = items.find((i) => i.id === form.item_id);
-
-  // Fetch per-station stock when item changes, to power source dropdown filtering
-  const handleItemChange = async (val) => {
-    const item = items.find((i) => i.id === val);
-    setForm((f) => ({ 
-      ...f, 
-      item_id: val, 
-      unit_rate: item?.rate_master?.unit_rate ?? '', 
-      source_station_id: '', 
-      supplier: item?.rate_master?.supplier || 'KDS',
-      quantity: '' 
-    }));
-    if (val) {
-      const { data } = await supabase
-        .from('v_station_inventory_summary')
-        .select('station_id, current_stock')
-        .eq('item_id', val);
-      const map = {};
-      (data || []).forEach(r => { map[r.station_id] = Number(r.current_stock || 0); });
-      setStationStockMap(map);
-    } else {
-      setStationStockMap({});
-    }
-  };
 
   // Depot Transfer: fetch item stock when source station changes
   const handleDepotStationChange = async (stationId) => {
@@ -409,11 +529,11 @@ export default function StockReceived() {
     }
   };
 
-  // Stations that have stock > 0 for the selected item (used to filter source dropdown)
+  // Stations that have stock > 0 for the selected IST item (used to filter source dropdown)
   const availableSourceStations = stations.filter(s => {
     if (s.id === selectedStation?.id) return false; // exclude self
-    if (!form.item_id) return true;                  // no item selected yet — show all
-    return (stationStockMap[s.id] || 0) > 0;         // only stations with stock
+    if (!istForm.item_id) return true;              // no item selected yet — show all
+    return (stationStockMap[s.id] || 0) > 0;        // only stations with stock
   }).sort((a, b) => a.code.localeCompare(b.code));
 
   const allowedStations = ALS_GROUPS[alsGroupFilter];
@@ -508,7 +628,10 @@ export default function StockReceived() {
           )}
           {role === ROLES.SC && (
             <>
-              <Button variant="accent" leftIcon={<PackagePlus size={16} />} onClick={() => setShowForm(true)}>
+              <Button variant="outline" leftIcon={<ArrowLeftRight size={16} />} onClick={() => { setShowIstForm(true); setError(''); }}>
+                Inter-Station Transfer
+              </Button>
+              <Button variant="accent" leftIcon={<PackagePlus size={16} />} onClick={() => { setShowForm(true); setError(''); }}>
                 Receive Stock
               </Button>
             </>
@@ -537,94 +660,306 @@ export default function StockReceived() {
         />
       </Card>
 
-      {/* Add Stock Received Modal */}
+      {/* Add Stock Received Multi-Item Batch Modal */}
       {role === ROLES.SC && (
       <Modal
         isOpen={showForm}
         onClose={() => { setShowForm(false); setError(''); }}
-        title="Add Stock Received"
+        title="Add Stock Received (Batch Entry)"
+        size="xl"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--color-gray-600)' }}>
+              <strong>{batchItems.length}</strong> {batchItems.length === 1 ? 'item' : 'items'}
+              {totalBatchValue > 0 && (
+                <span style={{ marginLeft: '12px', color: 'var(--color-primary-700)', fontWeight: 600 }}>
+                  Total Estimated Value: ₹{totalBatchValue.toFixed(2)}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button variant="outline" onClick={() => { setShowForm(false); setError(''); }}>
+                Cancel
+              </Button>
+              <Button variant="accent" onClick={handleBatchSubmit} isLoading={submitting}>
+                Confirm & Save All
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
+        
+        {/* Section 1: Common Batch Header (Entered Once) */}
+        <div style={{ 
+          background: 'var(--color-gray-50)', 
+          border: '1px solid var(--color-gray-200)', 
+          borderRadius: 'var(--radius-lg)', 
+          padding: 'var(--space-4)', 
+          marginBottom: 'var(--space-4)' 
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-gray-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>
+            Batch Information (Common to all items)
+          </div>
+          <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label form-label-required">Received Date</label>
+              <input 
+                type="date" 
+                className="form-control" 
+                value={batchHeader.received_date} 
+                onChange={(e) => setBatchHeader(h => ({ ...h, received_date: e.target.value }))} 
+                required 
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label form-label-required">Received From (Source)</label>
+              <select 
+                className="form-control" 
+                value={batchHeader.source} 
+                onChange={(e) => setBatchHeader(h => ({ ...h, source: e.target.value }))}
+              >
+                <option value="KDS">Main Store KDS</option>
+                <option value="DEPOT">🏭 Depot</option>
+              </select>
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Invoice Number</label>
+              <input 
+                type="text" 
+                className="form-control" 
+                placeholder="e.g. INV-2026-001" 
+                value={batchHeader.invoice_number} 
+                onChange={(e) => setBatchHeader(h => ({ ...h, invoice_number: e.target.value }))} 
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: 'var(--space-3)' }}>
+            <label className="form-label" style={{ fontSize: '12px' }}>Batch Remarks (Optional)</label>
+            <input 
+              type="text" 
+              className="form-control" 
+              placeholder="e.g. Monthly delivery from Main Store" 
+              value={batchHeader.remarks} 
+              onChange={(e) => setBatchHeader(h => ({ ...h, remarks: e.target.value }))} 
+            />
+          </div>
+        </div>
+
+        {/* Section 2: Multiple Item Rows */}
+        <div style={{ minHeight: '280px', paddingBottom: '120px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-gray-800)', letterSpacing: '0.01em' }}>
+              ITEMS ({batchItems.length})
+            </div>
+            <span style={{ fontSize: '12px', color: 'var(--color-gray-500)' }}>
+              Add items received in this delivery
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Header row on desktop */}
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'minmax(240px, 3.2fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(150px, 1.5fr) 40px', 
+              gap: '8px', 
+              padding: '4px 8px', 
+              fontSize: '12px', 
+              fontWeight: 600, 
+              color: 'var(--color-gray-600)',
+              borderBottom: '1px solid var(--color-gray-200)'
+            }}>
+              <div>Item <span style={{ color: 'var(--color-danger-500)' }}>*</span></div>
+              <div>Quantity <span style={{ color: 'var(--color-danger-500)' }}>*</span></div>
+              <div>Unit Rate (₹)</div>
+              <div>Remarks</div>
+              <div></div>
+            </div>
+
+            {batchItems.map((row, index) => {
+              const selectedRowItem = items.find(i => i.id === row.item_id);
+              const dispUnit = selectedRowItem ? getDisplayUnit(selectedRowItem.unit) : '';
+
+              return (
+                <div 
+                  key={row.id} 
+                  style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'minmax(240px, 3.2fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(150px, 1.5fr) 40px', 
+                    gap: '8px', 
+                    alignItems: 'center',
+                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-md)',
+                    background: index % 2 === 0 ? 'var(--color-white)' : 'var(--color-gray-50)',
+                    border: '1px solid var(--color-gray-200)',
+                    position: 'relative',
+                    zIndex: batchItems.length - index + 10
+                  }}
+                >
+                  {/* Item selection */}
+                  <div>
+                    <SearchableSelect
+                      options={items.map((i) => ({
+                        value: i.id,
+                        label: i.name,
+                        sublabel: i.rate_master?.tender_year ? `Tender: ${i.rate_master.tender_year}` : null
+                      }))}
+                      value={row.item_id}
+                      onChange={(val) => handleBatchItemChange(row.id, val)}
+                      placeholder="Search & select item..."
+                      required
+                    />
+                  </div>
+
+                  {/* Quantity input with unit badge */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input 
+                        type="number" 
+                        min="0.001" 
+                        step="any" 
+                        className="form-control" 
+                        placeholder="0.00"
+                        value={row.quantity} 
+                        onChange={(e) => handleBatchFieldChange(row.id, 'quantity', e.target.value)} 
+                        required 
+                      />
+                      <span style={{ 
+                        fontSize: '12px', 
+                        fontWeight: 600, 
+                        color: 'var(--color-gray-600)', 
+                        minWidth: '28px',
+                        textAlign: 'left'
+                      }}>
+                        {dispUnit || '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Unit Rate input */}
+                  <div>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      step="0.01" 
+                      className="form-control" 
+                      placeholder="0.00"
+                      value={row.unit_rate} 
+                      onChange={(e) => handleBatchFieldChange(row.id, 'unit_rate', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Row Remarks */}
+                  <div>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Item remarks..." 
+                      value={row.remarks} 
+                      onChange={(e) => handleBatchFieldChange(row.id, 'remarks', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Remove row button */}
+                  <div style={{ textAlign: 'center' }}>
+                    <button 
+                      type="button" 
+                      className="btn btn-ghost" 
+                      style={{ padding: '6px', color: 'var(--color-danger-600)' }}
+                      onClick={() => handleRemoveBatchRow(row.id)}
+                      title={batchItems.length > 1 ? 'Remove this item' : 'Clear this item'}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Add Another Item Button */}
+          <div style={{ marginTop: 'var(--space-3)' }}>
+            <Button 
+              type="button" 
+              variant="outline" 
+              leftIcon={<Plus size={16} />} 
+              onClick={handleAddBatchRow}
+              style={{ width: '100%', borderStyle: 'dashed', padding: '10px', justifyContent: 'center' }}
+            >
+              + Add Another Item
+            </Button>
+          </div>
+        </div>
+      </Modal>
+      )}
+
+      {/* Inter-Station Transfer Modal (Dedicated Single-Item Workflow) */}
+      {role === ROLES.SC && (
+      <Modal
+        isOpen={showIstForm}
+        onClose={() => { setShowIstForm(false); setError(''); }}
+        title="Inter-Station Transfer (Receive from Station)"
         size="md"
         footer={
           <>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button variant="accent" form="stock-form" type="submit" isLoading={submitting}>
-              Save Entry
+            <Button variant="outline" onClick={() => { setShowIstForm(false); setError(''); }}>Cancel</Button>
+            <Button variant="accent" form="ist-form" type="submit" isLoading={submitting}>
+              Complete Transfer
             </Button>
           </>
         }
       >
         {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-4)' }}>{error}</Alert>}
-        <form id="stock-form" onSubmit={handleSubmit}>
+        <form id="ist-form" onSubmit={handleIstSubmit}>
           <div className="form-group">
-            <label className="form-label form-label-required" htmlFor="sr-item">Search & Select Item</label>
+            <label className="form-label form-label-required" htmlFor="ist-item">Search & Select Item</label>
             <SearchableSelect
               options={items.map((i) => ({
                 value: i.id,
                 label: i.name,
                 sublabel: i.rate_master?.tender_year ? `Tender: ${i.rate_master.tender_year}` : null
               }))}
-              value={form.item_id}
-              onChange={handleItemChange}
+              value={istForm.item_id}
+              onChange={handleIstItemChange}
               placeholder="Search items..."
               required
             />
           </div>
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label form-label-required" htmlFor="sr-qty">Quantity ({selectedItem ? getDisplayUnit(selectedItem.unit) : 'Units'})</label>
-              <input id="sr-qty" type="number" min="0.001" step="any" className="form-control"
-                value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} required />
-            </div>
-            <div className="form-group">
-              <label className="form-label form-label-required" htmlFor="sr-date">Received Date</label>
-              <input id="sr-date" type="date" className="form-control"
-                value={form.received_date} onChange={(e) => setForm((f) => ({ ...f, received_date: e.target.value }))} required />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="sr-invoice">Invoice Number</label>
-              <input id="sr-invoice" type="text" className="form-control"
-                value={form.invoice_number} onChange={(e) => setForm((f) => ({ ...f, invoice_number: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="sr-rate">Unit Rate (₹)</label>
-              <input id="sr-rate" type="number" min="0" step="0.01" className="form-control"
-                value={form.unit_rate} onChange={(e) => setForm((f) => ({ ...f, unit_rate: e.target.value }))} />
-            </div>
-          </div>
+
           <div className="form-group">
-            <label className="form-label form-label-required" htmlFor="sr-source">Received From (Source)</label>
-            <select id="sr-source" className="form-control" value={form.source_station_id}
-              onChange={(e) => setForm(f => ({ 
-                ...f, 
-                source_station_id: e.target.value, 
-                supplier: e.target.value === 'DEPOT' ? 'DEPOT' : (selectedItem?.rate_master?.supplier || 'KDS'), 
-                quantity: '' 
-              }))}>
-              <option value="">Main Store KDS</option>
-              <option value="DEPOT">🏭 Depot</option>
-              <optgroup label="Inter-Station Transfer (Transfers from other station)">
-                {availableSourceStations.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.code} — {s.name}
-                    {form.item_id && stationStockMap[s.id] !== undefined ? ` (${(() => {
-                      const unit = selectedItem?.unit || 'Nos';
-                      const dispUnit = getDisplayUnit(unit);
-                      const dispVal = toDisplayValue(stationStockMap[s.id] || 0, unit);
-                      return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
-                    })()})` : ''}
-                  </option>
-                ))}
-              </optgroup>
+            <label className="form-label form-label-required" htmlFor="ist-source">Source Station (Transfer From)</label>
+            <select 
+              id="ist-source" 
+              className="form-control" 
+              value={istForm.source_station_id}
+              onChange={(e) => setIstForm(f => ({ ...f, source_station_id: e.target.value }))}
+              required
+            >
+              <option value="">Select source station...</option>
+              {availableSourceStations.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.code} — {s.name}
+                  {istForm.item_id && stationStockMap[s.id] !== undefined ? ` (${(() => {
+                    const selectedIstItem = items.find(i => i.id === istForm.item_id);
+                    const unit = selectedIstItem?.unit || 'Nos';
+                    const dispUnit = getDisplayUnit(unit);
+                    const dispVal = toDisplayValue(stationStockMap[s.id] || 0, unit);
+                    return dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
+                  })()})` : ''}
+                </option>
+              ))}
             </select>
           </div>
-          {/* Stock transfer stock-info alert: only for inter-station, not DEPOT */}
-          {form.source_station_id && form.source_station_id !== 'DEPOT' && selectedItem && (() => {
-            const unit = selectedItem.unit || 'Nos';
+
+          {/* Stock transfer stock-info alert */}
+          {istForm.source_station_id && istForm.item_id && (() => {
+            const selectedIstItem = items.find(i => i.id === istForm.item_id);
+            const unit = selectedIstItem?.unit || 'Nos';
             const dispUnit = getDisplayUnit(unit);
-            const raw = stationStockMap[form.source_station_id] || 0;
+            const raw = stationStockMap[istForm.source_station_id] || 0;
             const dispVal = toDisplayValue(raw, unit);
             const formatted = dispUnit === 'Nos' ? `${Math.round(dispVal)} Nos` : `${dispVal.toFixed(2)} ${dispUnit}`;
-            const srcStation = stations.find(s => s.id === form.source_station_id);
+            const srcStation = stations.find(s => s.id === istForm.source_station_id);
             return (
               <Alert variant={raw > 0 ? 'info' : 'danger'} style={{ marginBottom: 'var(--space-3)' }}>
                 {raw > 0
@@ -633,21 +968,59 @@ export default function StockReceived() {
               </Alert>
             );
           })()}
-          {selectedItem && form.quantity && form.unit_rate && (
-            <Alert variant="info" style={{ marginBottom: 'var(--space-3)' }}>
-            Total Value: ₹{(
-              toBillingQty(
-                toBaseValue(parseFloat(form.quantity), selectedItem.unit || 'Nos'), 
-                selectedItem.unit || 'Nos', 
-                selectedItem.rate_master?.nos_per_kg
-              ) * parseFloat(form.unit_rate)
-            ).toFixed(2)}
-            </Alert>
-          )}
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="ist-qty">
+                Quantity ({items.find(i => i.id === istForm.item_id) ? getDisplayUnit(items.find(i => i.id === istForm.item_id).unit) : 'Units'})
+              </label>
+              <input 
+                id="ist-qty" 
+                type="number" 
+                min="0.001" 
+                step="any" 
+                className="form-control"
+                value={istForm.quantity} 
+                onChange={(e) => setIstForm((f) => ({ ...f, quantity: e.target.value }))} 
+                required 
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label form-label-required" htmlFor="ist-date">Transfer Date</label>
+              <input 
+                id="ist-date" 
+                type="date" 
+                className="form-control"
+                value={istForm.received_date} 
+                onChange={(e) => setIstForm((f) => ({ ...f, received_date: e.target.value }))} 
+                required 
+              />
+            </div>
+          </div>
+
           <div className="form-group">
-            <label className="form-label" htmlFor="sr-remarks">Remarks</label>
-            <textarea id="sr-remarks" className="form-control" rows={2}
-              value={form.remarks} onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))} />
+            <label className="form-label" htmlFor="ist-rate">Unit Rate (₹)</label>
+            <input 
+              id="ist-rate" 
+              type="number" 
+              min="0" 
+              step="0.01" 
+              className="form-control"
+              value={istForm.unit_rate} 
+              onChange={(e) => setIstForm((f) => ({ ...f, unit_rate: e.target.value }))} 
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="ist-remarks">Remarks</label>
+            <textarea 
+              id="ist-remarks" 
+              className="form-control" 
+              rows={2}
+              placeholder="e.g. Emergency transfer"
+              value={istForm.remarks} 
+              onChange={(e) => setIstForm((f) => ({ ...f, remarks: e.target.value }))} 
+            />
           </div>
         </form>
       </Modal>
