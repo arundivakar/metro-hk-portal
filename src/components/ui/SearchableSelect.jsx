@@ -6,6 +6,7 @@ export default function SearchableSelect({
   options,
   value,
   onChange,
+  onOpenChange,
   placeholder = 'Select an option...',
   disabled = false,
   required = false
@@ -22,11 +23,12 @@ export default function SearchableSelect({
     function handleClickOutside(event) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
         setIsOpen(false);
+        onOpenChange?.(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [onOpenChange]);
 
   const filteredOptions = options.filter(opt => 
     opt.label.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -36,11 +38,22 @@ export default function SearchableSelect({
   const handleSelect = (optionValue) => {
     onChange(optionValue);
     setIsOpen(false);
+    onOpenChange?.(false);
     setSearchTerm('');
   };
 
+  const handleToggle = () => {
+    if (!disabled) {
+      setIsOpen(prev => {
+        const next = !prev;
+        onOpenChange?.(next);
+        return next;
+      });
+    }
+  };
+
   return (
-    <div className={`searchable-select-wrapper ${disabled ? 'disabled' : ''}`} ref={wrapperRef}>
+    <div className={`searchable-select-wrapper ${disabled ? 'disabled' : ''} ${isOpen ? 'open' : ''}`} ref={wrapperRef}>
       {/* Hidden input for form validation */}
       <input 
         type="text" 
@@ -52,7 +65,7 @@ export default function SearchableSelect({
 
       <div 
         className={`searchable-select-trigger ${isOpen ? 'open' : ''} form-control`}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={handleToggle}
       >
         <span className="searchable-select-value">
           {selectedOption ? selectedOption.label : <span className="placeholder">{placeholder}</span>}

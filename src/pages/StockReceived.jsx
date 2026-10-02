@@ -62,6 +62,7 @@ export default function StockReceived() {
     remarks: '',
   });
   const [batchItems, setBatchItems] = useState([createBlankBatchRow()]);
+  const [activeDropdownRowId, setActiveDropdownRowId] = useState(null);
 
   // Dedicated Inter-Station Transfer (IST) state
   const [showIstForm, setShowIstForm] = useState(false);
@@ -280,6 +281,7 @@ export default function StockReceived() {
 
       toast.success(`Successfully saved ${payloadArray.length} stock received ${payloadArray.length === 1 ? 'item' : 'items'}!`);
       setShowForm(false);
+      setActiveDropdownRowId(null);
       setBatchHeader({ received_date: today, source: 'KDS', invoice_number: '', remarks: '' });
       setBatchItems([createBlankBatchRow()]);
       loadData();
@@ -664,7 +666,7 @@ export default function StockReceived() {
       {role === ROLES.SC && (
       <Modal
         isOpen={showForm}
-        onClose={() => { setShowForm(false); setError(''); }}
+        onClose={() => { setShowForm(false); setActiveDropdownRowId(null); setError(''); }}
         title="Add Stock Received"
         subtitle="Record multiple items received in a single delivery"
         icon={PackagePlus}
@@ -704,7 +706,7 @@ export default function StockReceived() {
               )}
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <Button variant="outline" onClick={() => { setShowForm(false); setError(''); }}>
+              <Button variant="outline" onClick={() => { setShowForm(false); setActiveDropdownRowId(null); setError(''); }}>
                 Cancel
               </Button>
               <Button variant="accent" onClick={handleBatchSubmit} isLoading={submitting} leftIcon={<Check size={16} />}>
@@ -714,23 +716,24 @@ export default function StockReceived() {
           </div>
         }
       >
-        {error && <Alert variant="danger" style={{ marginBottom: 'var(--space-3)' }}>{error}</Alert>}
+        {error && <Alert variant="danger" style={{ marginBottom: '8px', flexShrink: 0 }}>{error}</Alert>}
         
-        {/* Section 1: Common Batch Header (Entered Once) */}
+        {/* Section 1: Common Batch Header (Ultra-Compact, ~120px max height) */}
         <div style={{ 
           background: 'var(--color-gray-50)', 
           border: '1px solid var(--color-gray-200)', 
           borderRadius: 'var(--radius-lg)', 
-          padding: 'var(--space-3) var(--space-4)', 
-          marginBottom: 'var(--space-4)' 
+          padding: '8px 12px', 
+          marginBottom: '10px',
+          flexShrink: 0
         }}>
           <div style={{ 
             fontSize: '11px', 
             fontWeight: 700, 
             color: 'var(--color-primary-800)', 
             textTransform: 'uppercase', 
-            letterSpacing: '0.06em', 
-            marginBottom: 'var(--space-3)',
+            letterSpacing: '0.05em', 
+            marginBottom: '6px',
             display: 'flex',
             alignItems: 'center',
             gap: '6px'
@@ -742,27 +745,33 @@ export default function StockReceived() {
             </span>
           </div>
 
-          <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
+          {/* ROW 1: Date | Source | Invoice */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+            gap: '10px', 
+            marginBottom: '6px' 
+          }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label form-label-required" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--color-gray-700)' }}>
-                <Calendar size={13} style={{ color: 'var(--color-primary-600)' }} /> Received Date
+              <label className="form-label form-label-required" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: '3px' }}>
+                <Calendar size={12} style={{ color: 'var(--color-primary-600)' }} /> Received Date
               </label>
               <input 
                 type="date" 
                 className="form-control" 
-                style={{ height: '36px', fontSize: '13px' }}
+                style={{ height: '32px', fontSize: '12px', padding: '0 8px' }}
                 value={batchHeader.received_date} 
                 onChange={(e) => setBatchHeader(h => ({ ...h, received_date: e.target.value }))} 
                 required 
               />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label form-label-required" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--color-gray-700)' }}>
-                <Warehouse size={13} style={{ color: 'var(--color-primary-600)' }} /> Received From (Source)
+              <label className="form-label form-label-required" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: '3px' }}>
+                <Warehouse size={12} style={{ color: 'var(--color-primary-600)' }} /> Received From (Source)
               </label>
               <select 
                 className="form-control" 
-                style={{ height: '36px', fontSize: '13px' }}
+                style={{ height: '32px', fontSize: '12px', padding: '0 8px' }}
                 value={batchHeader.source} 
                 onChange={(e) => setBatchHeader(h => ({ ...h, source: e.target.value }))}
               >
@@ -771,27 +780,29 @@ export default function StockReceived() {
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--color-gray-700)' }}>
-                <FileText size={13} style={{ color: 'var(--color-gray-500)' }} /> Invoice Number
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: '3px' }}>
+                <FileText size={12} style={{ color: 'var(--color-gray-500)' }} /> Invoice Number
               </label>
               <input 
                 type="text" 
                 className="form-control" 
-                style={{ height: '36px', fontSize: '13px' }}
+                style={{ height: '32px', fontSize: '12px', padding: '0 8px' }}
                 placeholder="Optional (e.g. INV-2026-001)" 
                 value={batchHeader.invoice_number} 
                 onChange={(e) => setBatchHeader(h => ({ ...h, invoice_number: e.target.value }))} 
               />
             </div>
           </div>
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: '4px' }}>
-              <MessageSquare size={13} style={{ color: 'var(--color-gray-500)' }} /> Batch Remarks
+
+          {/* ROW 2: Batch Remarks */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: '3px' }}>
+              <MessageSquare size={12} style={{ color: 'var(--color-gray-500)' }} /> Batch Remarks
             </label>
             <input 
               type="text" 
               className="form-control" 
-              style={{ height: '34px', fontSize: '13px' }}
+              style={{ height: '30px', fontSize: '12px', padding: '0 8px' }}
               placeholder="Common remarks for all items in this delivery (optional)..." 
               value={batchHeader.remarks} 
               onChange={(e) => setBatchHeader(h => ({ ...h, remarks: e.target.value }))} 
@@ -799,21 +810,20 @@ export default function StockReceived() {
           </div>
         </div>
 
-        {/* Section 2: Items Header & Control */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-gray-800)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                  Items
-                </span>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-primary-700)', background: 'var(--color-primary-50)', border: '1px solid var(--color-primary-200)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>
-                  {batchItems.length}
-                </span>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--color-gray-500)', marginTop: '2px' }}>
-                Add items received in this delivery
-              </p>
+        {/* Section 2: Items Section (Scrollable main content area) */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {/* Header row with Items count & Add Another Item button */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-gray-800)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Items
+              </span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-primary-700)', background: 'var(--color-primary-50)', border: '1px solid var(--color-primary-200)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>
+                {batchItems.length}
+              </span>
+              <span style={{ fontSize: '12px', color: 'var(--color-gray-500)' }}>
+                • Add items received in this delivery
+              </span>
             </div>
             <Button
               type="button"
@@ -821,34 +831,47 @@ export default function StockReceived() {
               size="sm"
               leftIcon={<Plus size={14} />}
               onClick={handleAddBatchRow}
-              style={{ fontWeight: 600, fontSize: '12px', padding: '6px 12px' }}
+              style={{ fontWeight: 600, fontSize: '12px', padding: '4px 10px' }}
             >
-              Add Another Item
+              + Add Another Item
             </Button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {/* Header row on desktop */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: '28px minmax(240px, 3.2fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(140px, 1.5fr) 32px', 
-              gap: '8px', 
-              padding: '6px 10px', 
-              fontSize: '11px', 
-              fontWeight: 700, 
-              color: 'var(--color-gray-500)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              borderBottom: '1px solid var(--color-gray-200)'
-            }}>
-              <div style={{ textAlign: 'center' }}>#</div>
-              <div>Item <span style={{ color: 'var(--color-danger-500)' }}>*</span></div>
-              <div>Quantity <span style={{ color: 'var(--color-danger-500)' }}>*</span></div>
-              <div>Unit Rate (₹)</div>
-              <div>Remarks</div>
-              <div></div>
-            </div>
+          {/* Desktop Column Titles (Fixed above scrollable list) */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: '28px minmax(260px, 3.2fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(140px, 1.5fr) 32px', 
+            gap: '8px', 
+            padding: '5px 10px', 
+            fontSize: '11px', 
+            fontWeight: 700, 
+            color: 'var(--color-gray-500)',
+            textTransform: 'uppercase', 
+            letterSpacing: '0.05em', 
+            borderBottom: '1px solid var(--color-gray-200)',
+            flexShrink: 0,
+            marginBottom: '6px'
+          }}>
+            <div style={{ textAlign: 'center' }}>#</div>
+            <div>Item <span style={{ color: 'var(--color-danger-500)' }}>*</span></div>
+            <div>Quantity <span style={{ color: 'var(--color-danger-500)' }}>*</span></div>
+            <div>Unit Rate (₹)</div>
+            <div>Remarks</div>
+            <div></div>
+          </div>
 
+          {/* Scrollable Item Rows Container */}
+          <div style={{ 
+            flex: 1, 
+            minHeight: 0, 
+            overflowY: 'auto', 
+            overflowX: 'visible',
+            paddingRight: '4px', 
+            paddingBottom: '260px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '6px' 
+          }}>
             {batchItems.map((row, index) => {
               const selectedRowItem = items.find(i => i.id === row.item_id);
               const dispUnit = selectedRowItem ? getDisplayUnit(selectedRowItem.unit) : '';
@@ -858,17 +881,17 @@ export default function StockReceived() {
                   key={row.id} 
                   style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: '28px minmax(240px, 3.2fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(140px, 1.5fr) 32px', 
+                    gridTemplateColumns: '28px minmax(260px, 3.2fr) minmax(130px, 1.2fr) minmax(110px, 1fr) minmax(140px, 1.5fr) 32px', 
                     gap: '8px', 
-                    alignItems: 'center',
-                    padding: '8px 10px',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--color-white)',
-                    border: '1px solid var(--color-gray-200)',
-                    boxShadow: 'var(--shadow-xs)',
-                    position: 'relative',
-                    zIndex: batchItems.length - index + 10,
-                    transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast)'
+                    alignItems: 'center', 
+                    padding: '6px 10px', 
+                    borderRadius: 'var(--radius-md)', 
+                    background: 'var(--color-white)', 
+                    border: '1px solid var(--color-gray-200)', 
+                    boxShadow: 'var(--shadow-xs)', 
+                    position: 'relative', 
+                    zIndex: activeDropdownRowId === row.id ? 100 : (batchItems.length - index + 10), 
+                    flexShrink: 0 
                   }}
                 >
                   {/* Row Number Badge */}
@@ -884,8 +907,8 @@ export default function StockReceived() {
                       alignItems: 'center', 
                       justifyContent: 'center', 
                       fontSize: '11px', 
-                      fontWeight: 700,
-                      userSelect: 'none'
+                      fontWeight: 700, 
+                      userSelect: 'none' 
                     }}>
                       {String(index + 1).padStart(2, '0')}
                     </span>
@@ -901,6 +924,7 @@ export default function StockReceived() {
                       }))}
                       value={row.item_id}
                       onChange={(val) => handleBatchItemChange(row.id, val)}
+                      onOpenChange={(isOpen) => setActiveDropdownRowId(isOpen ? row.id : null)}
                       placeholder="Search & select item..."
                       required
                     />
@@ -917,7 +941,7 @@ export default function StockReceived() {
                         placeholder="0.00"
                         style={{ 
                           paddingRight: dispUnit ? '48px' : '10px', 
-                          height: '36px', 
+                          height: '34px', 
                           fontSize: '13px' 
                         }}
                         value={row.quantity} 
@@ -964,7 +988,7 @@ export default function StockReceived() {
                         placeholder="0.00"
                         style={{ 
                           paddingLeft: '20px', 
-                          height: '36px', 
+                          height: '34px', 
                           fontSize: '13px' 
                         }}
                         value={row.unit_rate} 
@@ -979,7 +1003,7 @@ export default function StockReceived() {
                       type="text" 
                       className="form-control" 
                       placeholder="Remarks..." 
-                      style={{ height: '36px', fontSize: '13px' }}
+                      style={{ height: '34px', fontSize: '13px' }}
                       value={row.remarks} 
                       onChange={(e) => handleBatchFieldChange(row.id, 'remarks', e.target.value)} 
                     />
@@ -991,8 +1015,8 @@ export default function StockReceived() {
                       type="button" 
                       className="btn btn-ghost" 
                       style={{ 
-                        width: '32px', 
-                        height: '32px', 
+                        width: '30px', 
+                        height: '30px', 
                         padding: 0, 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -1018,30 +1042,30 @@ export default function StockReceived() {
                 </div>
               );
             })}
-          </div>
 
-          {/* Bottom Add Another Item Button */}
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            <Button 
-              type="button" 
-              variant="outline" 
-              leftIcon={<Plus size={15} />} 
-              onClick={handleAddBatchRow}
-              style={{ 
-                width: '100%', 
-                borderStyle: 'dashed', 
-                borderColor: 'var(--color-gray-300)',
-                color: 'var(--color-primary-700)',
-                background: 'var(--color-gray-50)',
-                padding: '8px 14px', 
-                fontSize: '13px',
-                fontWeight: 600,
-                justifyContent: 'center',
-                borderRadius: 'var(--radius-md)'
-              }}
-            >
-              + Add Another Item
-            </Button>
+            {/* Bottom Add Another Item Button */}
+            <div style={{ marginTop: '2px', flexShrink: 0 }}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                leftIcon={<Plus size={14} />} 
+                onClick={handleAddBatchRow}
+                style={{ 
+                  width: '100%', 
+                  borderStyle: 'dashed', 
+                  borderColor: 'var(--color-gray-300)',
+                  color: 'var(--color-primary-700)',
+                  background: 'var(--color-gray-50)',
+                  padding: '7px 14px', 
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  justifyContent: 'center',
+                  borderRadius: 'var(--radius-md)'
+                }}
+              >
+                + Add Another Item
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
