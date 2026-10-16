@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { toDisplayValue, getDisplayUnit } from '../utils/units';
-import { TrendingDown, Calendar, FileText, Calculator, History, Pencil, Trash2 } from 'lucide-react';
+import SearchableSelect from '../components/ui/SearchableSelect';
+import { TrendingDown, Calendar, FileText, Calculator, History, Pencil, Trash2, Plus, Package } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -54,6 +55,14 @@ export default function StockMovement() {
   const [formQty, setFormQty] = useState('');
   const [formDate, setFormDate] = useState(today.toLocaleDateString('en-CA'));
   const [formRemarks, setFormRemarks] = useState('');
+
+  // Batch Consumption Modal
+  const [showBatchConsumption, setShowBatchConsumption] = useState(false);
+  const [batchConsDate, setBatchConsDate] = useState(today.toLocaleDateString('en-CA'));
+  const createBlankConsRow = () => ({ id: Date.now().toString() + Math.random().toString(36).slice(2, 7), item_id: '', quantity: '', remarks: '' });
+  const [batchConsItems, setBatchConsItems] = useState([createBlankConsRow()]);
+  const [batchConsError, setBatchConsError] = useState('');
+  const [batchConsSubmitting, setBatchConsSubmitting] = useState(false);
 
   // Bill Generation
   const [showBillModal, setShowBillModal] = useState(false);
@@ -386,6 +395,56 @@ export default function StockMovement() {
   };
 
 
+  // ── Batch Consumption Submit ───────────────────────────────────────────────────────────────────
+  const handleBatchConsumptionSubmit = async (e) => {
+    e.preventDefault();
+    setBatchConsError('');
+    for (const row of batchConsItems) {
+      if (!row.item_id) return setBatchConsError('Please select an item for every row.');
+      const qty = parseFloat(row.quantity);
+      if (!qty || qty <= 0) return setBatchConsError('Please enter a valid quantity for every row.');
+      const tableRow = tableData.find(t => t.id === row.item_id);
+      if (tableRow && qty > (tableRow.closing_stock_raw ?? 0) + 0.01)
+        return setBatchConsError(`Insufficient stock for '${tableRow.item_name}'. Available: ${tableRow.closing_stock} ${tableRow.unit}`);
+    }
+    setBatchConsSubmitting(true);
+    let savedCount = 0;
+    let firstErr = null;
+    for (const row of batchConsItems) {
+      try {
+        const itemMeta = items.find(i => i.id === row.item_id);
+        const dbUnit = itemMeta?.unit || 'Nos';
+        const qty = parseFloat(row.quantity);
+        let baseQty = (dbUnit === 'ml' || dbUnit === 'g' || dbUnit === 'Ltr' || dbUnit === 'Kg') ? qty * 1000 : qty;
+        const tableRow = tableData.find(t => t.id === row.item_id);
+        const exactDbStock = tableRow?.closing_stock_base ?? 0;
+        if (baseQty > exactDbStock && baseQty <= exactDbStock + 10) baseQty = exactDbStock;
+        await logConsumption({
+          station_id: selectedStation.id,
+          item_id: row.item_id,
+          quantity_used: baseQty,
+          consumption_date: batchConsDate,
+          remarks: row.remarks || null,
+          logged_by: profile.id,
+        });
+        savedCount++;
+      } catch (err) {
+        if (!firstErr) firstErr = err.message;
+      }
+    }
+    setBatchConsSubmitting(false);
+    if (firstErr) {
+      if (savedCount > 0) toast.success(`${savedCount} item(s) saved. Some failed.`);
+      setBatchConsError(firstErr);
+    } else {
+      toast.success(`${savedCount} consumption entries logged!`);
+      setShowBatchConsumption(false);
+      setBatchConsItems([createBlankConsRow()]);
+      setBatchConsDate(today.toLocaleDateString('en-CA'));
+      loadData();
+    }
+  };
+
   const columns = [
     { key: 'sl_no', label: 'Sl.No', width: 60, render: (v) => <span style={{ color: 'var(--color-gray-500)' }}>{v}</span> },
     { key: 'item_name', label: 'Item Name', sortable: true, render: (v) => <strong>{v}</strong> },
@@ -482,6 +541,23 @@ export default function StockMovement() {
         </div>
       }
     >
+      {/* Batch Consumption Button — SC only */}
+      {role === ROLES.SC && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-3)' }}>
+          <Button
+            variant="primary"
+            leftIcon={<Plus size={16} />}
+            onClick={() => {
+              setBatchConsItems([createBlankConsRow()]);
+              setBatchConsDate(today.toLocaleDateString('en-CA'));
+              setBatchConsError('');
+              setShowBatchConsumption(true);
+            }}
+          >
+            Log Consumption
+          </Button>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--color-border)' }}>
         <button 
           className={`btn ${activeTab === 'aggregate' ? 'btn-primary' : 'btn-ghost'}`}
@@ -629,6 +705,83 @@ export default function StockMovement() {
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* Batch Consumption Modal */}
+      <Modal
+        isOpen={showBatchConsumption}
+        onClose={() => setShowBatchConsumption(false)}
+        title="Log Consumption (Batch Entry)"
+        size="xl"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowBatchConsumption(false)}>Cancel</Button>
+            <Button variant="warning" form="batch-cons-form" type="submit" isLoading={batchConsSubmitting}
+              leftIcon={<Package size={16} />}>
+              Confirm &amp; Save All
+            </Button>
+          </>
+        }
+      >
+        <form id="batch-cons-form" onSubmit={handleBatchConsumptionSubmit}>
+          {batchConsError && <Alert variant="danger" style={{ marginBottom: 'var(--space-3)' }}>{batchConsError}</Alert>}
+
+          {/* Date */}
+          <div style={{ background: 'var(--color-gray-50)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label form-label-required" style={{ marginBottom: 4 }}>Consumption Date</label>
+              <input type="date" className="form-control" value={batchConsDate}
+                onChange={e => setBatchConsDate(e.target.value)} required />
+            </div>
+          </div>
+
+          {/* Item rows */}
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 'var(--space-3)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--color-primary-800)', color: '#fff', fontSize: 'var(--font-size-xs)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              <div>Item</div><div>Quantity</div><div>Remarks</div><div></div>
+            </div>
+            {batchConsItems.map((row, idx) => {
+              const itemMeta = items.find(i => i.id === row.item_id);
+              const dbUnit = itemMeta?.unit || 'Nos';
+              const dispUnit = getDisplayUnit(dbUnit);
+              const tableRow = tableData.find(t => t.id === row.item_id);
+              const stockInfo = tableRow ? `Avail: ${tableRow.closing_stock} ${tableRow.unit}` : '';
+              return (
+                <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: idx > 0 ? '1px solid var(--color-border)' : 'none', alignItems: 'start', background: idx % 2 === 0 ? '#fff' : 'var(--color-gray-50)' }}>
+                  <div>
+                    <SearchableSelect
+                      options={items.map(i => ({ value: i.id, label: i.name, sublabel: i.rate_master?.brand }))}
+                      value={row.item_id}
+                      onChange={val => setBatchConsItems(prev => prev.map(r => r.id === row.id ? { ...r, item_id: val, quantity: '' } : r))}
+                      placeholder="Select item..."
+                      required
+                    />
+                    {stockInfo && <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', marginTop: 2 }}>{stockInfo}</div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <input type="number" step="any" min="0.001" className="form-control" value={row.quantity}
+                      placeholder="Qty" required
+                      onChange={e => setBatchConsItems(prev => prev.map(r => r.id === row.id ? { ...r, quantity: e.target.value } : r))} />
+                    {dispUnit !== 'Nos' && <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', whiteSpace: 'nowrap' }}>{dispUnit}</span>}
+                  </div>
+                  <input type="text" className="form-control" placeholder="Remarks (optional)" value={row.remarks}
+                    onChange={e => setBatchConsItems(prev => prev.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r))} />
+                  <button type="button" title="Remove row"
+                    style={{ padding: '6px', background: 'none', border: 'none', cursor: 'pointer', color: batchConsItems.length === 1 ? 'var(--color-gray-300)' : 'var(--color-danger-500)' }}
+                    disabled={batchConsItems.length === 1}
+                    onClick={() => setBatchConsItems(prev => prev.filter(r => r.id !== row.id))}>
+                    <TrendingDown size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <Button type="button" variant="outline" size="sm" leftIcon={<Plus size={14} />}
+            onClick={() => setBatchConsItems(prev => [...prev, createBlankConsRow()])}>
+            Add Another Item
+          </Button>
+        </form>
       </Modal>
 
     </Layout>

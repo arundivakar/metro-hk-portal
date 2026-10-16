@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './hooks/useAuth';
+import { useVersionCheck } from './hooks/useVersionCheck';
 
 // Auth
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -23,6 +24,7 @@ import NotFound from './pages/NotFound';
 import PrintChecklist from './pages/PrintChecklist';
 import DataInitialization from './pages/DataInitialization';
 import BusinessContinuity from './pages/BusinessContinuity';
+import ISTAudit from './pages/ISTAudit';
 
 // Styles
 import './styles/index.css';
@@ -34,8 +36,24 @@ import { ROLES } from './lib/constants';
 
 export default function App() {
   useAuth(); // Initialize auth listener
+  const { updateAvailable, reload, dismiss } = useVersionCheck();
 
   return (
+    <>
+    {updateAvailable && (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+        background: 'var(--color-primary-800, #1e3a5f)',
+        color: '#fff', padding: '10px 20px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
+        fontSize: '14px', fontFamily: 'Inter, sans-serif',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+      }}>
+        <span>🔄 A new version of the portal is available.</span>
+        <button onClick={() => reload(false)} style={{ background: '#fff', color: 'var(--color-primary-800, #1e3a5f)', border: 'none', borderRadius: 6, padding: '4px 14px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Refresh Now</button>
+        <button onClick={dismiss} style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Dismiss</button>
+      </div>
+    )}
     <BrowserRouter>
       <Routes>
         {/* Public */}
@@ -169,6 +187,15 @@ export default function App() {
           }
         />
 
+        <Route
+          path="/ist-audit"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.ALS]}>
+              <ISTAudit />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
@@ -196,5 +223,6 @@ export default function App() {
         }}
       />
     </BrowserRouter>
+    </>
   );
 }

@@ -120,6 +120,7 @@ export const NAV_ITEMS = {
     { path: '/reports', label: 'Reports', icon: 'BarChart2' },
     { path: '/settings', label: 'Data Import', icon: 'Database' },
     { path: '/business-continuity', label: 'Business Continuity', icon: 'ShieldCheck' },
+    { path: '/ist-audit', label: 'IST Audit & Repair', icon: 'GitMerge' },
   ],
 };
 

@@ -43,6 +43,7 @@ export default function AssetLifecycle() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [alsStation, setAlsStation] = useState('All');
   const [search, setSearch] = useState('');
+  const [historyItemFilter, setHistoryItemFilter] = useState('All');
   const [stations, setStations] = useState([]);
 
   const allowedStations = ALS_GROUPS[alsGroupFilter];
@@ -292,7 +293,8 @@ export default function AssetLifecycle() {
 
   const filteredHistory = historyLogs
     .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code))
-    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || alsStation === 'All' || a.stations?.code === alsStation);
+    .filter((a) => (role !== ROLES.ALS && role !== ROLES.HKTL) || alsStation === 'All' || a.stations?.code === alsStation)
+    .filter((a) => historyItemFilter === 'All' || a.item_id === historyItemFilter);
 
   const assetColumns = [
     { key: 'sl_no', label: 'Sl. No', render: (_, __, i) => <span style={{ color: 'var(--color-gray-500)' }}>{i + 1}</span> },
@@ -479,6 +481,13 @@ export default function AssetLifecycle() {
                 {stations.filter(s => !allowedStations || allowedStations.includes(s.code)).map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
               </select>
             )}
+            <select className="form-control" style={{ width: 'auto', minWidth: '220px' }} value={historyItemFilter} onChange={(e) => setHistoryItemFilter(e.target.value)}>
+              <option value="All">All Items</option>
+              {[...new Map(historyLogs.map(l => [l.item_id, l.inventory_items?.name])).entries()]
+                .filter(([, name]) => !!name)
+                .sort(([, a], [, b]) => a.localeCompare(b))
+                .map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
           </div>
           <CardHeader title="Transition History Log" icon={<History size={16} />} subtitle={`${filteredHistory.length} transitions`} />
           <DataTable
