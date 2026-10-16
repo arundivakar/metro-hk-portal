@@ -464,18 +464,7 @@ export default function StockMovement() {
       }
     },
     { key: 'consumption',          label: 'Consumed',  render: (v, row) => `${v} ${row.unit}` },
-    { key: 'closing_stock',        label: 'Closing',           render: (v, row) => <strong style={{ color: Number(row.closing_stock_raw) === 0 ? 'var(--color-danger-600)' : 'inherit' }}>{v} {row.unit}</strong> },
-    ...(role === ROLES.SC ? [{
-      key: 'actions', label: 'Actions', render: (_, row) => (
-        <Button variant="primary" size="sm" leftIcon={<Pencil size={14} />} onClick={() => {
-          setSelectedItemForAction(row);
-          setFormQty(''); setFormRemarks(''); setFormDate(today.toLocaleDateString('en-CA'));
-          setShowConsumptionForm(true);
-        }}>
-          Log Daily Consumption
-        </Button>
-      )
-    }] : [])
+    { key: 'closing_stock',        label: 'Closing',           render: (v, row) => <strong style={{ color: Number(row.closing_stock_raw) === 0 ? 'var(--color-danger-600)' : 'inherit' }}>{v} {row.unit}</strong> }
   ];
 
   const historyColumns = [
@@ -712,6 +701,8 @@ export default function StockMovement() {
         isOpen={showBatchConsumption}
         onClose={() => setShowBatchConsumption(false)}
         title="Log Consumption (Batch Entry)"
+        subtitle="Record daily material consumption in a single entry"
+        icon={TrendingDown}
         size="xl"
         footer={
           <>
@@ -726,60 +717,188 @@ export default function StockMovement() {
         <form id="batch-cons-form" onSubmit={handleBatchConsumptionSubmit}>
           {batchConsError && <Alert variant="danger" style={{ marginBottom: 'var(--space-3)' }}>{batchConsError}</Alert>}
 
-          {/* Date */}
-          <div style={{ background: 'var(--color-gray-50)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label form-label-required" style={{ marginBottom: 4 }}>Consumption Date</label>
-              <input type="date" className="form-control" value={batchConsDate}
-                onChange={e => setBatchConsDate(e.target.value)} required />
+          {/* Date Header */}
+          <div style={{ 
+            background: 'var(--color-gray-50)', 
+            border: '1px solid var(--color-gray-200)', 
+            borderRadius: 'var(--radius-md)', 
+            padding: '10px 14px', 
+            marginBottom: 'var(--space-4)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 'var(--space-6)' 
+          }}>
+            <div className="form-group" style={{ margin: 0, minWidth: '200px' }}>
+              <label className="form-label form-label-required" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: '4px' }}>
+                <Calendar size={13} style={{ color: 'var(--color-primary-600)' }} /> Consumption Date
+              </label>
+              <input 
+                type="date" 
+                className="form-control" 
+                value={batchConsDate}
+                max={today.toLocaleDateString('en-CA')}
+                onChange={e => setBatchConsDate(e.target.value)} 
+                required 
+              />
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--color-gray-500)', paddingTop: '16px' }}>
+              • Select the date when materials were physically consumed at the station.
             </div>
           </div>
 
-          {/* Item rows */}
-          <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 'var(--space-3)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', background: 'var(--color-primary-800)', color: '#fff', fontSize: 'var(--font-size-xs)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              <div>Item</div><div>Quantity</div><div>Remarks</div><div></div>
+          {/* Item rows table */}
+          <div style={{ 
+            border: '1px solid var(--color-border)', 
+            borderRadius: 'var(--radius-md)', 
+            marginBottom: 'var(--space-4)',
+            background: 'var(--color-white)'
+          }}>
+            {/* Header row */}
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: '36px minmax(280px, 3fr) minmax(130px, 1.2fr) minmax(160px, 1.5fr) 36px', 
+              gap: 'var(--space-2)', 
+              padding: '8px 12px', 
+              background: 'var(--color-primary-800)', 
+              color: '#fff', 
+              fontSize: '11px', 
+              fontWeight: 700, 
+              letterSpacing: '0.05em', 
+              textTransform: 'uppercase',
+              borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
+            }}>
+              <div style={{ textAlign: 'center' }}>#</div>
+              <div>Item <span style={{ color: 'var(--color-danger-300)' }}>*</span></div>
+              <div>Quantity <span style={{ color: 'var(--color-danger-300)' }}>*</span></div>
+              <div>Remarks</div>
+              <div></div>
             </div>
+
+            {/* Rows */}
             {batchConsItems.map((row, idx) => {
               const itemMeta = items.find(i => i.id === row.item_id);
               const dbUnit = itemMeta?.unit || 'Nos';
               const dispUnit = getDisplayUnit(dbUnit);
               const tableRow = tableData.find(t => t.id === row.item_id);
-              const stockInfo = tableRow ? `Avail: ${tableRow.closing_stock} ${tableRow.unit}` : '';
+              const stockInfo = tableRow ? `Available: ${tableRow.closing_stock} ${tableRow.unit}` : '';
+
               return (
-                <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderTop: idx > 0 ? '1px solid var(--color-border)' : 'none', alignItems: 'start', background: idx % 2 === 0 ? '#fff' : 'var(--color-gray-50)' }}>
+                <div 
+                  key={row.id} 
+                  style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '36px minmax(280px, 3fr) minmax(130px, 1.2fr) minmax(160px, 1.5fr) 36px', 
+                    gap: 'var(--space-2)', 
+                    padding: '8px 12px', 
+                    borderTop: '1px solid var(--color-border)', 
+                    alignItems: 'center', 
+                    background: idx % 2 === 0 ? '#fff' : 'var(--color-gray-50)' 
+                  }}
+                >
+                  {/* Row Number */}
+                  <div style={{ textAlign: 'center', fontSize: '11px', fontWeight: 700, color: 'var(--color-gray-500)' }}>
+                    {String(idx + 1).padStart(2, '0')}
+                  </div>
+
+                  {/* Searchable Select */}
                   <div>
                     <SearchableSelect
-                      options={items.map(i => ({ value: i.id, label: i.name, sublabel: i.rate_master?.brand }))}
+                      options={items.map(i => ({ 
+                        value: i.id, 
+                        label: i.name, 
+                        sublabel: i.rate_master?.brand ? `Brand: ${i.rate_master.brand}` : null 
+                      }))}
                       value={row.item_id}
                       onChange={val => setBatchConsItems(prev => prev.map(r => r.id === row.id ? { ...r, item_id: val, quantity: '' } : r))}
-                      placeholder="Select item..."
+                      placeholder="Search & select material..."
                       required
                     />
-                    {stockInfo && <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', marginTop: 2 }}>{stockInfo}</div>}
+                    {stockInfo && (
+                      <div style={{ fontSize: '11px', color: 'var(--color-primary-700)', fontWeight: 600, marginTop: '3px' }}>
+                        {stockInfo}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    <input type="number" step="any" min="0.001" className="form-control" value={row.quantity}
-                      placeholder="Qty" required
-                      onChange={e => setBatchConsItems(prev => prev.map(r => r.id === row.id ? { ...r, quantity: e.target.value } : r))} />
-                    {dispUnit !== 'Nos' && <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', whiteSpace: 'nowrap' }}>{dispUnit}</span>}
+
+                  {/* Quantity input with unit */}
+                  <div>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input 
+                        type="number" 
+                        step="any" 
+                        min="0.001" 
+                        className="form-control" 
+                        value={row.quantity}
+                        placeholder="0.00" 
+                        style={{ paddingRight: dispUnit ? '48px' : '10px' }}
+                        required
+                        onChange={e => setBatchConsItems(prev => prev.map(r => r.id === row.id ? { ...r, quantity: e.target.value } : r))} 
+                      />
+                      {dispUnit && (
+                        <span style={{ 
+                          position: 'absolute', 
+                          right: '6px', 
+                          fontSize: '11px', 
+                          fontWeight: 700, 
+                          color: 'var(--color-primary-700)', 
+                          background: 'var(--color-primary-50)', 
+                          border: '1px solid var(--color-primary-100)', 
+                          padding: '2px 5px', 
+                          borderRadius: 'var(--radius-sm)',
+                          pointerEvents: 'none'
+                        }}>
+                          {dispUnit}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <input type="text" className="form-control" placeholder="Remarks (optional)" value={row.remarks}
-                    onChange={e => setBatchConsItems(prev => prev.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r))} />
-                  <button type="button" title="Remove row"
-                    style={{ padding: '6px', background: 'none', border: 'none', cursor: 'pointer', color: batchConsItems.length === 1 ? 'var(--color-gray-300)' : 'var(--color-danger-500)' }}
-                    disabled={batchConsItems.length === 1}
-                    onClick={() => setBatchConsItems(prev => prev.filter(r => r.id !== row.id))}>
-                    <TrendingDown size={16} />
-                  </button>
+
+                  {/* Remarks */}
+                  <div>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Remarks (optional)" 
+                      value={row.remarks}
+                      onChange={e => setBatchConsItems(prev => prev.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r))} 
+                    />
+                  </div>
+
+                  {/* Delete row */}
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <button 
+                      type="button" 
+                      title="Remove row"
+                      style={{ 
+                        padding: '6px', 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: batchConsItems.length === 1 ? 'not-allowed' : 'pointer', 
+                        color: batchConsItems.length === 1 ? 'var(--color-gray-300)' : 'var(--color-danger-500)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      disabled={batchConsItems.length === 1}
+                      onClick={() => setBatchConsItems(prev => prev.filter(r => r.id !== row.id))}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          <Button type="button" variant="outline" size="sm" leftIcon={<Plus size={14} />}
-            onClick={() => setBatchConsItems(prev => [...prev, createBlankConsRow()])}>
-            Add Another Item
+          <Button 
+            type="button" 
+            variant="outline" 
+            size="sm" 
+            leftIcon={<Plus size={14} />}
+            onClick={() => setBatchConsItems(prev => [...prev, createBlankConsRow()])}
+            style={{ fontWeight: 600 }}
+          >
+            + Add Another Item
           </Button>
         </form>
       </Modal>
