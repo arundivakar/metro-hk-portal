@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Boxes, Plus, ChevronRight, History, PackagePlus, Pencil, Trash2, Search } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -13,6 +13,21 @@ import { supabase } from '../lib/supabase';
 import { ROLES, ASSET_STATUS, ASSET_STATUS_LABELS, ALS_GROUPS, STATION_ORDER } from '../lib/constants';
 import { formatDate } from '../utils/dateHelpers';
 import toast from 'react-hot-toast';
+
+const formatAssetItemLabel = (item) => {
+  if (!item) return '';
+  const parts = [];
+  if (item.name) parts.push(item.name.trim());
+  const brand = item.rate_master?.brand?.trim();
+  if (brand && brand !== '—' && brand.toLowerCase() !== 'null' && brand.toLowerCase() !== 'undefined') {
+    parts.push(brand);
+  }
+  const tenderYear = item.rate_master?.tender_year?.trim();
+  if (tenderYear && tenderYear !== '—' && tenderYear.toLowerCase() !== 'null' && tenderYear.toLowerCase() !== 'undefined') {
+    parts.push(tenderYear);
+  }
+  return parts.join(' — ');
+};
 
 export default function AssetLifecycle() {
   const { role, profile } = useAuthStore();
@@ -47,6 +62,21 @@ export default function AssetLifecycle() {
   const [stations, setStations] = useState([]);
 
   const allowedStations = ALS_GROUPS[alsGroupFilter];
+// Options for Transition History item filter: Item Name — Brand — Tender Year
+  const historyItemOptions = useMemo(() => {
+    const map = new Map();
+    historyLogs.forEach((log) => {
+      if (log.item_id && log.inventory_items && !map.has(log.item_id)) {
+        const label = formatAssetItemLabel(log.inventory_items);
+        if (label) {
+          map.set(log.item_id, label);
+        }
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [historyLogs]);
 
   const stageCounts = {
     in_use: assets.reduce((sum, a) => sum + ((role !== ROLES.ALS && role !== ROLES.HKTL) || !allowedStations || allowedStations.includes(a.stations?.code) ? Number(a.quantity_in_use || 0) : 0), 0),
@@ -102,7 +132,7 @@ export default function AssetLifecycle() {
       let query = supabase.from('asset_lifecycle_logs')
         .select(`
           *,
-          inventory_items ( name, unit, category ),
+          inventory_items ( name, unit, category, rate_master ( brand, tender_year, supplier ) ),
           stations ( code, name ),
           users_profile ( full_name )
         `)
@@ -352,7 +382,21 @@ export default function AssetLifecycle() {
     { key: 'transition_date', label: 'Transition Date', render: (v, r) => v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : formatDate(r.created_at) },
     { key: 'created_at', label: 'Logged On', render: (v) => formatDate(v) },
     ...((role === ROLES.ALS || role === ROLES.HKTL) ? [{ key: 'station', label: 'Station', render: (_, r) => r.stations?.code ?? '—' }] : []),
-    { key: 'item', label: 'Cleaning Material', render: (_, r) => r.inventory_items?.name ?? '—' },
+    { 
+      key: 'item', 
+      label: 'Cleaning Material', 
+      render: (_, r) => {
+        const brand = r.inventory_items?.rate_master?.brand;
+        const tender = r.inventory_items?.rate_master?.tender_year;
+        const extra = [brand, tender].filter(Boolean).join(' • ');
+        return (
+          <div>
+            <strong>{r.inventory_items?.name ?? '—'}</strong>
+            {extra ? <div style={{ fontSize: '11px', color: 'var(--color-gray-500)', marginTop: '2px' }}>{extra}</div> : null}
+          </div>
+        );
+      }
+    },
     { key: 'quantity', label: 'Quantity', render: (v, r) => `${v} ${r.inventory_items?.unit ?? ''}` },
     { key: 'from_status', label: 'Initial Status', render: (v) => v === 'Stock' ? <span className="badge" style={{ background: 'var(--color-primary-100)', color: 'var(--color-primary-700)' }}>Stock</span> : <AssetStatusBadge status={v} /> },
     { key: 'to_status', label: 'Current Status', render: (v) => <AssetStatusBadge status={v} /> },
@@ -481,12 +525,11 @@ export default function AssetLifecycle() {
                 {stations.filter(s => !allowedStations || allowedStations.includes(s.code)).map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
               </select>
             )}
-            <select className="form-control" style={{ width: 'auto', minWidth: '220px' }} value={historyItemFilter} onChange={(e) => setHistoryItemFilter(e.target.value)}>
+            <select className="form-control" style={{ width: 'auto', minWidth: '320px', maxWidth: '100%' }} value={historyItemFilter} onChange={(e) => setHistoryItemFilter(e.target.value)}>
               <option value="All">All Items</option>
-              {[...new Map(historyLogs.map(l => [l.item_id, l.inventory_items?.name])).entries()]
-                .filter(([, name]) => !!name)
-                .sort(([, a], [, b]) => a.localeCompare(b))
-                .map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              {historyItemOptions.map(opt => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
             </select>
           </div>
           <CardHeader title="Transition History Log" icon={<History size={16} />} subtitle={`${filteredHistory.length} transitions`} />

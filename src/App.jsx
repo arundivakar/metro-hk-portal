@@ -49,8 +49,8 @@ export default function App() {
         fontSize: '14px', fontFamily: 'Inter, sans-serif',
         boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
       }}>
-        <span>🔄 A new version of the portal is available.</span>
-        <button onClick={() => reload(false)} style={{ background: '#fff', color: 'var(--color-primary-800, #1e3a5f)', border: 'none', borderRadius: 6, padding: '4px 14px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Refresh Now</button>
+        <span>🔄 A new version is available. Refresh to update the portal.</span>
+        <button onClick={reload} style={{ background: '#fff', color: 'var(--color-primary-800, #1e3a5f)', border: 'none', borderRadius: 6, padding: '4px 14px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Refresh Now</button>
         <button onClick={dismiss} style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Dismiss</button>
       </div>
     )}
