@@ -404,8 +404,8 @@
 .modal-xl {
   width: min(1160px, 94vw);
   max-width: 1160px;
-  height: min(88vh, 850px);
-  max-height: 88vh;
+  height: min(90vh, 880px);
+  max-height: 90vh;
 }
 
 .modal-xl .modal-body {
