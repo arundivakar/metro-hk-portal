@@ -57,14 +57,26 @@ export default function ItemConsumptionAnalysis() {
   // Sorting for main table: 'station_asc' | 'station_desc' | 'geographic' | 'total_desc' | 'total_asc'
   const [tableSort, setTableSort] = useState('geographic');
 
+  // Heatmap toggle for monthly consumption table
+  const [showHeatmap, setShowHeatmap] = useState(false);
+
   // MoM selected comparison month key (e.g. '2026-10')
   const [momMonthKey, setMomMonthKey] = useState('');
+
+  // MoM sorting: 'diff_desc' (default) | 'diff_asc' | 'pct_desc' | 'pct_asc' | 'station_asc' | 'station_desc'
+  const [momSort, setMomSort] = useState('diff_desc');
 
   // Selected stations for Chart B (station comparison)
   const [selectedStationCodes, setSelectedStationCodes] = useState([]);
 
+  // Chart B network average toggle
+  const [showNetworkAverage, setShowNetworkAverage] = useState(true);
+
   // Chart A view toggle: monthly vs cumulative
   const [isCumulative, setIsCumulative] = useState(false);
+
+  // Chart C ranking limit: 'all' (default) | 'top5'
+  const [rankingLimit, setRankingLimit] = useState('all');
 
   // Tooltip state for SVG charts
   const [svgTooltip, setSvgTooltip] = useState(null);
@@ -336,6 +348,18 @@ export default function ItemConsumptionAnalysis() {
     };
   }, [stations, logs, fyMonths, precedingMarch, dbUnit, currentYM]);
 
+  // Maximum monthly value across all stations and active months for heatmap intensity
+  const maxMonthlyVal = useMemo(() => {
+    let max = 0;
+    stations.forEach((s) => {
+      fyMonths.forEach((m) => {
+        const val = stationMonthData[s.id]?.[m.key];
+        if (val && val > max) max = val;
+      });
+    });
+    return max;
+  }, [stations, fyMonths, stationMonthData]);
+
   // Determine completed months in the FY
   const completedMonths = useMemo(() => {
     return fyMonths.filter((m) => getMonthTiming(m.key) === 'elapsed');
@@ -520,12 +544,42 @@ export default function ItemConsumptionAnalysis() {
     );
   }, [momComparisonData]);
 
-  // Toggle station selection for Chart B
+  // Sorted MoM comparison rows (default by highest actual quantity increase: diff_desc)
+  const sortedMomRows = useMemo(() => {
+    const list = [...momComparisonData];
+    if (momSort === 'diff_desc') {
+      return list.sort((a, b) => b.diff - a.diff);
+    }
+    if (momSort === 'diff_asc') {
+      return list.sort((a, b) => a.diff - b.diff);
+    }
+    if (momSort === 'pct_desc') {
+      return list.sort((a, b) => {
+        const aPct = a.changePct !== null ? a.changePct : (a.currVal > 0 ? 999999 : 0);
+        const bPct = b.changePct !== null ? b.changePct : (b.currVal > 0 ? 999999 : 0);
+        return bPct - aPct;
+      });
+    }
+    if (momSort === 'pct_asc') {
+      return list.sort((a, b) => {
+        const aPct = a.changePct !== null ? a.changePct : (a.currVal > 0 ? 999999 : 0);
+        const bPct = b.changePct !== null ? b.changePct : (b.currVal > 0 ? 999999 : 0);
+        return aPct - bPct;
+      });
+    }
+    if (momSort === 'station_asc') {
+      return list.sort((a, b) => a.station.name.localeCompare(b.station.name));
+    }
+    if (momSort === 'station_desc') {
+      return list.sort((a, b) => b.station.name.localeCompare(a.station.name));
+    }
+    return list;
+  }, [momComparisonData, momSort]);
+
+  // Toggle station selection for Chart B (allows selecting/deselecting up to 6 stations)
   const toggleStationSelection = (code) => {
     if (selectedStationCodes.includes(code)) {
-      if (selectedStationCodes.length > 1) {
-        setSelectedStationCodes(selectedStationCodes.filter((c) => c !== code));
-      }
+      setSelectedStationCodes(selectedStationCodes.filter((c) => c !== code));
     } else {
       if (selectedStationCodes.length < 6) {
         setSelectedStationCodes([...selectedStationCodes, code]);
@@ -741,7 +795,17 @@ export default function ItemConsumptionAnalysis() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '12px' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '12px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={`btn btn-secondary ${showHeatmap ? 'btn-primary' : ''}`}
+                style={{ fontSize: '12px', padding: '4px 10px' }}
+                onClick={() => setShowHeatmap(!showHeatmap)}
+                title="Toggle subtle color intensity based on station consumption distribution"
+              >
+                Heatmap: {showHeatmap ? 'ON' : 'OFF'}
+              </button>
+
               <span style={{ color: 'var(--color-gray-500)' }}>Sort by:</span>
               <button
                 type="button"
@@ -816,7 +880,21 @@ export default function ItemConsumptionAnalysis() {
                             </td>
                           );
                         }
-                        return <td key={m.key}>{fmtQty(val)}</td>;
+                        let cellStyle = undefined;
+                        if (showHeatmap && val > 0 && maxMonthlyVal > 0) {
+                          const ratio = Math.min(val / maxMonthlyVal, 1);
+                          const alpha = (0.07 + ratio * 0.40).toFixed(2);
+                          cellStyle = {
+                            backgroundColor: `rgba(13, 148, 136, ${alpha})`,
+                            color: ratio >= 0.5 ? '#0f172a' : 'inherit',
+                            fontWeight: ratio >= 0.5 ? 600 : 400,
+                          };
+                        }
+                        return (
+                          <td key={m.key} style={cellStyle} className={showHeatmap ? 'cell-heatmap' : undefined}>
+                            {fmtQty(val)}
+                          </td>
+                        );
                       })}
                       <td style={{ fontWeight: 700, color: sTotal > 0 ? 'var(--color-primary-800)' : 'var(--color-gray-400)' }}>
                         {fmtQty(sTotal)}
@@ -882,6 +960,37 @@ export default function ItemConsumptionAnalysis() {
                 </select>
               </div>
 
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '12px' }}>
+                <span style={{ color: 'var(--color-gray-500)' }}>Sort:</span>
+                <button
+                  type="button"
+                  className={`btn btn-secondary ${momSort.startsWith('diff') ? 'btn-primary' : ''}`}
+                  style={{ fontSize: '11px', padding: '3px 8px' }}
+                  onClick={() => setMomSort(momSort === 'diff_desc' ? 'diff_asc' : 'diff_desc')}
+                  title="Sort by actual quantity difference"
+                >
+                  Qty Diff {momSort === 'diff_desc' ? '▼' : '▲'}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-secondary ${momSort.startsWith('pct') ? 'btn-primary' : ''}`}
+                  style={{ fontSize: '11px', padding: '3px 8px' }}
+                  onClick={() => setMomSort(momSort === 'pct_desc' ? 'pct_asc' : 'pct_desc')}
+                  title="Sort by percentage change"
+                >
+                  % Change {momSort === 'pct_desc' ? '▼' : '▲'}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-secondary ${momSort.startsWith('station') ? 'btn-primary' : ''}`}
+                  style={{ fontSize: '11px', padding: '3px 8px' }}
+                  onClick={() => setMomSort(momSort === 'station_asc' ? 'station_desc' : 'station_asc')}
+                  title="Sort by station name"
+                >
+                  Station {momSort === 'station_asc' ? '▲' : '▼'}
+                </button>
+              </div>
+
               <div className="mom-legend">
                 <Badge variant="neutral">&lt;10% Normal</Badge>
                 <Badge variant="warning">10-25% Moderate</Badge>
@@ -897,47 +1006,121 @@ export default function ItemConsumptionAnalysis() {
             <table className="mom-table">
               <thead>
                 <tr>
-                  <th>Station</th>
+                  <th
+                    className={`sortable ${momSort.startsWith('station') ? 'sort-active' : ''}`}
+                    onClick={() => setMomSort(momSort === 'station_asc' ? 'station_desc' : 'station_asc')}
+                  >
+                    Station {momSort === 'station_asc' ? '▲' : momSort === 'station_desc' ? '▼' : ''}
+                  </th>
                   <th>{momPrecedingLabel} ({displayUnit})</th>
                   <th>{momCurrentLabel} ({displayUnit})</th>
-                  <th>Difference ({displayUnit})</th>
-                  <th>Change %</th>
+                  <th
+                    className={`sortable ${momSort.startsWith('diff') ? 'sort-active' : ''}`}
+                    onClick={() => setMomSort(momSort === 'diff_desc' ? 'diff_asc' : 'diff_desc')}
+                  >
+                    Difference ({displayUnit}) {momSort === 'diff_desc' ? '▼' : momSort === 'diff_asc' ? '▲' : ''}
+                  </th>
+                  <th
+                    className={`sortable ${momSort.startsWith('pct') ? 'sort-active' : ''}`}
+                    onClick={() => setMomSort(momSort === 'pct_desc' ? 'pct_asc' : 'pct_desc')}
+                  >
+                    Change % {momSort === 'pct_desc' ? '▼' : momSort === 'pct_asc' ? '▲' : ''}
+                  </th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {momComparisonData.map((row) => (
-                  <tr key={row.station.id}>
-                    <td>
-                      {row.station.name}{' '}
-                      <span style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>({row.station.code})</span>
-                    </td>
-                    <td>{fmtQty(row.prevVal)}</td>
-                    <td>{fmtQty(row.currVal)}</td>
-                    <td
-                      style={{
-                        fontWeight: 600,
-                        color:
-                          row.diff > 0
-                            ? 'var(--color-warning-700, #b45309)'
-                            : row.diff < 0
-                            ? 'var(--color-success-700, #15803d)'
-                            : 'inherit',
-                      }}
-                    >
-                      {row.diff > 0 ? `+${fmtQty(row.diff)}` : fmtQty(row.diff)}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>
-                      {row.changePct === null
-                        ? '—'
-                        : `${row.changePct > 0 ? '+' : ''}${row.changePct.toFixed(1)}%`}
-                    </td>
-                    <td>
-                      <Badge variant={row.statusVariant}>{row.statusLabel}</Badge>
-                    </td>
-                  </tr>
-                ))}
+                {sortedMomRows.map((row) => {
+                  const isHighIncrease =
+                    (row.changePct !== null && row.changePct >= 25) ||
+                    (row.prevVal === 0 && row.currVal > 0);
+                  return (
+                    <tr key={row.station.id} className={isHighIncrease ? 'mom-row-warning' : undefined}>
+                      <td>
+                        {row.station.name}{' '}
+                        <span style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>({row.station.code})</span>
+                      </td>
+                      <td>{fmtQty(row.prevVal)}</td>
+                      <td>{fmtQty(row.currVal)}</td>
+                      <td
+                        style={{
+                          fontWeight: 600,
+                          color:
+                            row.diff > 0
+                              ? 'var(--color-warning-700, #b45309)'
+                              : row.diff < 0
+                              ? 'var(--color-success-700, #15803d)'
+                              : 'inherit',
+                        }}
+                      >
+                        {row.diff > 0 ? `+${fmtQty(row.diff)}` : fmtQty(row.diff)}
+                      </td>
+                      <td style={{ fontWeight: 600 }}>
+                        {row.changePct === null
+                          ? '—'
+                          : `${row.changePct > 0 ? '+' : ''}${row.changePct.toFixed(1)}%`}
+                      </td>
+                      <td>
+                        <Badge variant={row.statusVariant}>{row.statusLabel}</Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
+              <tfoot>
+                <tr className="mom-total-row">
+                  <td>
+                    <strong>Total (All 25 Stations)</strong>
+                  </td>
+                  <td>
+                    <strong>{fmtQty(momNetworkTrend?.prev ?? 0)}</strong>
+                  </td>
+                  <td>
+                    <strong>{fmtQty(momNetworkTrend?.curr ?? 0)}</strong>
+                  </td>
+                  <td
+                    style={{
+                      fontWeight: 700,
+                      color:
+                        momNetworkTrend?.diff > 0
+                          ? 'var(--color-warning-700, #b45309)'
+                          : momNetworkTrend?.diff < 0
+                          ? 'var(--color-success-700, #15803d)'
+                          : 'inherit',
+                    }}
+                  >
+                    {momNetworkTrend?.diff > 0
+                      ? `+${fmtQty(momNetworkTrend.diff)}`
+                      : fmtQty(momNetworkTrend?.diff ?? 0)}
+                  </td>
+                  <td style={{ fontWeight: 700 }}>
+                    {momNetworkTrend?.prev > 0
+                      ? `${momNetworkTrend.pct > 0 ? '+' : ''}${momNetworkTrend.pct.toFixed(1)}%`
+                      : momNetworkTrend?.curr > 0
+                      ? 'New'
+                      : '0.0%'}
+                  </td>
+                  <td>
+                    <Badge
+                      variant={
+                        momNetworkTrend?.pct >= 25
+                          ? 'warning'
+                          : momNetworkTrend?.diff > 0
+                          ? 'warning'
+                          : momNetworkTrend?.diff < 0
+                          ? 'success'
+                          : 'neutral'
+                      }
+                    >
+                      {momNetworkTrend?.diff > 0
+                        ? `+${momNetworkTrend.pct.toFixed(1)}% Network Increase`
+                        : momNetworkTrend?.diff < 0
+                        ? `${momNetworkTrend.pct.toFixed(1)}% Network Decrease`
+                        : 'No Network Change'}
+                    </Badge>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -1014,6 +1197,27 @@ export default function ItemConsumptionAnalysis() {
                   Select stations below to compare their month-on-month trends side by side (up to 6 stations)
                 </div>
               </div>
+
+              <div className="chart-header-actions">
+                <button
+                  type="button"
+                  className={`chart-toggle-btn ${showNetworkAverage ? 'active' : ''}`}
+                  onClick={() => setShowNetworkAverage(!showNetworkAverage)}
+                  title="Toggle Network Average reference line (all 25 active stations)"
+                >
+                  <span className="legend-line-sample solid" style={{ borderTopColor: '#64748b', width: 14 }}></span>
+                  Network Average
+                </button>
+                <button
+                  type="button"
+                  className="btn-clear-selection"
+                  onClick={() => setSelectedStationCodes([])}
+                  disabled={selectedStationCodes.length === 0}
+                  title="Deselect all stations"
+                >
+                  Clear All ({selectedStationCodes.length})
+                </button>
+              </div>
             </div>
 
             <div className="chart-legend-indicator">
@@ -1025,6 +1229,12 @@ export default function ItemConsumptionAnalysis() {
                 <span className="legend-line-sample dashed" style={{ borderTopColor: '#64748b' }}></span>
                 <span>Current Month (MTD)</span>
               </span>
+              {showNetworkAverage && (
+                <span className="chart-legend-item">
+                  <span className="legend-line-sample solid" style={{ borderTopColor: '#64748b', borderWidth: 2 }}></span>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>Network Avg (all 25 stns)</span>
+                </span>
+              )}
             </div>
 
             <div className="station-pill-list">
@@ -1055,6 +1265,9 @@ export default function ItemConsumptionAnalysis() {
                 stationData={stationMonthData}
                 unit={displayUnit}
                 currentYM={currentYM}
+                showNetworkAverage={showNetworkAverage}
+                monthNetworkTotals={monthNetworkTotals}
+                totalStationsCount={stations.length}
                 setTooltip={setSvgTooltip}
               />
             </div>
@@ -1069,7 +1282,28 @@ export default function ItemConsumptionAnalysis() {
                   Chart C: Station Ranking by Total Consumption
                 </h3>
                 <div className="chart-subtitle">
-                  All 25 stations ranked from highest to lowest FY {financialYear} consumption
+                  {rankingLimit === 'top5'
+                    ? `Top 5 stations ranked by FY ${financialYear} consumption`
+                    : `All 25 stations ranked from highest to lowest FY ${financialYear} consumption`}
+                </div>
+              </div>
+
+              <div className="chart-header-actions">
+                <div className="chart-view-toggle">
+                  <button
+                    type="button"
+                    className={`chart-toggle-btn ${rankingLimit === 'top5' ? 'active' : ''}`}
+                    onClick={() => setRankingLimit('top5')}
+                  >
+                    Top 5
+                  </button>
+                  <button
+                    type="button"
+                    className={`chart-toggle-btn ${rankingLimit === 'all' ? 'active' : ''}`}
+                    onClick={() => setRankingLimit('all')}
+                  >
+                    All 25 Stations
+                  </button>
                 </div>
               </div>
             </div>
@@ -1079,6 +1313,7 @@ export default function ItemConsumptionAnalysis() {
                 stations={stations}
                 stationTotals={stationFYTotals}
                 unit={displayUnit}
+                rankingLimit={rankingLimit}
                 setTooltip={setSvgTooltip}
               />
             </div>
@@ -1429,7 +1664,18 @@ function MonthlyTrendLineChart({ months, totals, unit, currentYM, isCumulative =
 /**
  * Chart B: Multi-Station Consumption Trend Comparison
  */
-function MultiStationLineChart({ months, stations, selectedStationCodes, stationData, unit, currentYM, setTooltip }) {
+function MultiStationLineChart({
+  months,
+  stations,
+  selectedStationCodes,
+  stationData,
+  unit,
+  currentYM,
+  showNetworkAverage = false,
+  monthNetworkTotals = {},
+  totalStationsCount = 25,
+  setTooltip,
+}) {
   const WIDTH = 900;
   const HEIGHT = 260;
   const PADDING = { top: 20, right: 30, bottom: 40, left: 60 };
@@ -1440,7 +1686,7 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
   const mtdMonth = months.find((m) => m.key === currentYM);
   const activeMonths = months.filter((m) => m.key <= currentYM);
 
-  // Determine overall max value for selected stations across active months
+  // Determine overall max value for selected stations and network average across active months
   let rawMax = 0;
   stations.forEach((s) => {
     activeMonths.forEach((m) => {
@@ -1448,6 +1694,13 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
       if (v > rawMax) rawMax = v;
     });
   });
+
+  if (showNetworkAverage && totalStationsCount > 0) {
+    activeMonths.forEach((m) => {
+      const avg = (monthNetworkTotals[m.key] || 0) / totalStationsCount;
+      if (avg > rawMax) rawMax = avg;
+    });
+  }
 
   const isIntegerOnly = unit === 'Nos';
   const { niceMax, ticks } = getNiceYScale(rawMax, 5, isIntegerOnly);
@@ -1487,6 +1740,140 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
           </g>
         );
       })}
+
+      {/* Empty selection notice if no station selected and network average disabled */}
+      {stations.length === 0 && !showNetworkAverage && (
+        <text
+          x={WIDTH / 2}
+          y={HEIGHT / 2}
+          textAnchor="middle"
+          fontSize={13}
+          fill="#94a3b8"
+          fontWeight={500}
+        >
+          Select stations above or enable Network Average to view trends
+        </text>
+      )}
+
+      {/* Network Average Reference Line */}
+      {showNetworkAverage && totalStationsCount > 0 && (() => {
+        const avgColor = '#64748b';
+        const avgCompletedPts = completedMonths.map((m) => {
+          const idx = months.findIndex((item) => item.key === m.key);
+          const val = (monthNetworkTotals[m.key] || 0) / totalStationsCount;
+          return {
+            x: PADDING.left + idx * stepX,
+            y: getY(val),
+            val,
+            month: m,
+          };
+        });
+
+        const avgCompletedPathD = avgCompletedPts.reduce((acc, pt, idx) => {
+          return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
+        }, '');
+
+        const avgMtdVal = mtdMonth ? (monthNetworkTotals[mtdMonth.key] || 0) / totalStationsCount : 0;
+        const avgMtdPt = mtdMonth
+          ? {
+              x: PADDING.left + months.findIndex((item) => item.key === mtdMonth.key) * stepX,
+              y: getY(avgMtdVal),
+              val: avgMtdVal,
+              month: mtdMonth,
+            }
+          : null;
+
+        let avgMtdDashedPathD = '';
+        if (avgMtdPt && avgCompletedPts.length > 0) {
+          const lastPt = avgCompletedPts[avgCompletedPts.length - 1];
+          avgMtdDashedPathD = `M ${lastPt.x} ${lastPt.y} L ${avgMtdPt.x} ${avgMtdPt.y}`;
+        }
+
+        return (
+          <g key="network-avg-series">
+            {/* Solid line for completed months */}
+            {avgCompletedPathD && (
+              <path
+                d={avgCompletedPathD}
+                fill="none"
+                stroke={avgColor}
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+            )}
+
+            {/* Dashed line to MTD month */}
+            {avgMtdDashedPathD && (
+              <path
+                d={avgMtdDashedPathD}
+                fill="none"
+                stroke={avgColor}
+                strokeWidth={2}
+                strokeDasharray="6,4"
+                strokeLinecap="round"
+              />
+            )}
+
+            {/* Completed months circular markers */}
+            {avgCompletedPts.map((pt) => (
+              <circle
+                key={`avg-${pt.month.key}`}
+                cx={pt.x}
+                cy={pt.y}
+                r={3.5}
+                fill="#ffffff"
+                stroke={avgColor}
+                strokeWidth={2}
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={(e) =>
+                  setTooltip({
+                    content: `Network Avg (all 25 stns) - ${pt.month.label} ${pt.month.year}: ${formatQty(pt.val, unit)} ${unit}`,
+                    x: e.clientX,
+                    y: e.clientY,
+                  })
+                }
+                onMouseMove={(e) =>
+                  setTooltip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : null))
+                }
+              />
+            ))}
+
+            {/* Distinct MTD marker */}
+            {avgMtdPt && (
+              <g>
+                <circle
+                  cx={avgMtdPt.x}
+                  cy={avgMtdPt.y}
+                  r={6.5}
+                  fill="none"
+                  stroke={avgColor}
+                  strokeWidth={1.5}
+                  strokeDasharray="3,2"
+                />
+                <circle
+                  cx={avgMtdPt.x}
+                  cy={avgMtdPt.y}
+                  r={3.5}
+                  fill={avgColor}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={(e) =>
+                    setTooltip({
+                      content: `Network Avg (all 25 stns) - ${avgMtdPt.month.label} (MTD - Partial Month): ${formatQty(avgMtdPt.val, unit)} ${unit} recorded so far`,
+                      x: e.clientX,
+                      y: e.clientY,
+                    })
+                  }
+                  onMouseMove={(e) =>
+                    setTooltip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : null))
+                  }
+                />
+              </g>
+            )}
+          </g>
+        );
+      })()}
 
       {/* Station Trend Lines */}
       {stations.map((s) => {
@@ -1659,19 +2046,24 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
 /**
  * Chart C: Station Ranking Bar Chart
  */
-function StationRankingBarChart({ stations, stationTotals, unit, setTooltip }) {
-  // Sort all 25 stations descending by FY total
+function StationRankingBarChart({ stations, stationTotals, unit, rankingLimit = 'all', setTooltip }) {
+  // Sort all stations descending by FY total
   const ranked = useMemo(() => {
     return [...stations].sort((a, b) => (stationTotals[b.id] || 0) - (stationTotals[a.id] || 0));
   }, [stations, stationTotals]);
 
-  const maxTotal = Math.max(...ranked.map((s) => stationTotals[s.id] || 0), 1);
+  // Support Top 5 slice or All Stations
+  const displayRanked = useMemo(() => {
+    return rankingLimit === 'top5' ? ranked.slice(0, 5) : ranked;
+  }, [ranked, rankingLimit]);
+
+  const maxTotal = Math.max(...displayRanked.map((s) => stationTotals[s.id] || 0), 1);
 
   const BAR_HEIGHT = 20;
   const ROW_GAP = 8;
-  const PADDING = { top: 10, right: 90, bottom: 20, left: 160 };
+  const PADDING = { top: 10, right: 100, bottom: 20, left: 160 };
   const WIDTH = 900;
-  const HEIGHT = PADDING.top + ranked.length * (BAR_HEIGHT + ROW_GAP) + PADDING.bottom;
+  const HEIGHT = PADDING.top + displayRanked.length * (BAR_HEIGHT + ROW_GAP) + PADDING.bottom;
   const innerW = WIDTH - PADDING.left - PADDING.right;
 
   return (
@@ -1680,7 +2072,7 @@ function StationRankingBarChart({ stations, stationTotals, unit, setTooltip }) {
       style={{ width: '100%', height: 'auto', display: 'block' }}
       onMouseLeave={() => setTooltip(null)}
     >
-      {ranked.map((s, idx) => {
+      {displayRanked.map((s, idx) => {
         const total = stationTotals[s.id] || 0;
         const y = PADDING.top + idx * (BAR_HEIGHT + ROW_GAP);
         const barW = total > 0 ? Math.max((total / maxTotal) * innerW, 4) : 0;
@@ -1735,7 +2127,7 @@ function StationRankingBarChart({ stations, stationTotals, unit, setTooltip }) {
               />
             )}
 
-            {/* Value Label */}
+            {/* Value Label beside bar */}
             <text
               x={PADDING.left + barW + 8}
               y={y + BAR_HEIGHT / 2 + 4}
