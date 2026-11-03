@@ -63,14 +63,38 @@ export default function ItemConsumptionAnalysis() {
   // Selected stations for Chart B (station comparison)
   const [selectedStationCodes, setSelectedStationCodes] = useState([]);
 
+  // Chart A view toggle: monthly vs cumulative
+  const [isCumulative, setIsCumulative] = useState(false);
+
   // Tooltip state for SVG charts
   const [svgTooltip, setSvgTooltip] = useState(null);
 
-  // Determine current system date
-  const now = useMemo(() => new Date(), []);
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 1 to 12
-  const currentYM = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  // Determine current system date in Indian Standard Time (Asia/Kolkata)
+  const { currentYear, currentMonth, currentYM } = useMemo(() => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: 'numeric',
+      }).formatToParts(new Date());
+      const y = parseInt(parts.find((p) => p.type === 'year')?.value, 10);
+      const m = parseInt(parts.find((p) => p.type === 'month')?.value, 10);
+      return {
+        currentYear: y,
+        currentMonth: m,
+        currentYM: `${y}-${String(m).padStart(2, '0')}`,
+      };
+    } catch {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      return {
+        currentYear: y,
+        currentMonth: m,
+        currentYM: `${y}-${String(m).padStart(2, '0')}`,
+      };
+    }
+  }, []);
 
   // Default FY calculation
   const defaultCurrentFY = useMemo(() => {
@@ -929,9 +953,41 @@ export default function ItemConsumptionAnalysis() {
                   Chart A: Overall Monthly Consumption Trend
                 </h3>
                 <div className="chart-subtitle">
-                  Total network consumption of {item.name} for each month of FY {financialYear}
+                  {isCumulative
+                    ? `Cumulative network consumption of ${item.name} over FY ${financialYear}`
+                    : `Total network consumption of ${item.name} for each month of FY ${financialYear}`}
                 </div>
               </div>
+
+              <div className="chart-header-actions">
+                <div className="chart-view-toggle">
+                  <button
+                    type="button"
+                    className={`chart-toggle-btn ${!isCumulative ? 'active' : ''}`}
+                    onClick={() => setIsCumulative(false)}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    type="button"
+                    className={`chart-toggle-btn ${isCumulative ? 'active' : ''}`}
+                    onClick={() => setIsCumulative(true)}
+                  >
+                    Cumulative
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-legend-indicator">
+              <span className="chart-legend-item">
+                <span className="legend-line-sample solid"></span>
+                <span>Completed Months</span>
+              </span>
+              <span className="chart-legend-item">
+                <span className="legend-line-sample dashed"></span>
+                <span>Current Month (MTD)</span>
+              </span>
             </div>
 
             <div className="chart-svg-container">
@@ -940,6 +996,7 @@ export default function ItemConsumptionAnalysis() {
                 totals={monthNetworkTotals}
                 unit={displayUnit}
                 currentYM={currentYM}
+                isCumulative={isCumulative}
                 setTooltip={setSvgTooltip}
               />
             </div>
@@ -957,6 +1014,17 @@ export default function ItemConsumptionAnalysis() {
                   Select stations below to compare their month-on-month trends side by side (up to 6 stations)
                 </div>
               </div>
+            </div>
+
+            <div className="chart-legend-indicator">
+              <span className="chart-legend-item">
+                <span className="legend-line-sample solid" style={{ borderTopColor: '#64748b' }}></span>
+                <span>Completed Months</span>
+              </span>
+              <span className="chart-legend-item">
+                <span className="legend-line-sample dashed" style={{ borderTopColor: '#64748b' }}></span>
+                <span>Current Month (MTD)</span>
+              </span>
             </div>
 
             <div className="station-pill-list">
@@ -1106,7 +1174,7 @@ function formatTickLabel(val) {
 /**
  * Chart A: Overall Monthly Consumption Line / Area Chart
  */
-function MonthlyTrendLineChart({ months, totals, unit, currentYM, setTooltip }) {
+function MonthlyTrendLineChart({ months, totals, unit, currentYM, isCumulative = false, setTooltip }) {
   const svgRef = useRef(null);
 
   const WIDTH = 900;
@@ -1115,32 +1183,72 @@ function MonthlyTrendLineChart({ months, totals, unit, currentYM, setTooltip }) 
   const innerW = WIDTH - PADDING.left - PADDING.right;
   const innerH = HEIGHT - PADDING.top - PADDING.bottom;
 
-  // Filter elapsed or current months
-  const activeMonths = months.filter((m) => m.key <= currentYM);
-  const values = activeMonths.map((m) => totals[m.key] || 0);
-  const rawMax = Math.max(...values, 0);
+  // Month partitions
+  const completedMonths = months.filter((m) => m.key < currentYM);
+  const mtdMonth = months.find((m) => m.key === currentYM);
+
+  // Compute values (monthly or cumulative)
+  let runningCum = 0;
+  const displayValues = {};
+
+  months.forEach((m) => {
+    const rawVal = totals[m.key] || 0;
+    if (m.key <= currentYM) {
+      runningCum += rawVal;
+      displayValues[m.key] = isCumulative ? runningCum : rawVal;
+    } else {
+      displayValues[m.key] = null; // future
+    }
+  });
+
+  // Calculate nice Y scale based on active values (completed + mtd)
+  const activeVals = months
+    .filter((m) => m.key <= currentYM)
+    .map((m) => displayValues[m.key] || 0);
+
+  const rawMax = Math.max(...activeVals, 0);
   const isIntegerOnly = unit === 'Nos';
   const { niceMax, ticks } = getNiceYScale(rawMax, 5, isIntegerOnly);
 
   const stepX = innerW / (months.length - 1);
   const getY = (val) => PADDING.top + innerH - (val / niceMax) * innerH;
 
-  // Build SVG path points
-  const points = activeMonths.map((m, idx) => {
-    const val = totals[m.key] || 0;
+  // Build SVG path points for completed months
+  const completedPoints = completedMonths.map((m) => {
+    const idx = months.findIndex((item) => item.key === m.key);
+    const val = displayValues[m.key] || 0;
     const x = PADDING.left + idx * stepX;
     const y = getY(val);
     return { x, y, month: m, val };
   });
 
-  const pathD = points.reduce((acc, pt, idx) => {
+  // MTD point
+  const mtdPoint = mtdMonth
+    ? {
+        x: PADDING.left + months.findIndex((item) => item.key === mtdMonth.key) * stepX,
+        y: getY(displayValues[mtdMonth.key] || 0),
+        month: mtdMonth,
+        val: displayValues[mtdMonth.key] || 0,
+      }
+    : null;
+
+  // Completed solid line path
+  const completedPathD = completedPoints.reduce((acc, pt, idx) => {
     return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
   }, '');
 
-  const areaD =
-    points.length > 0
-      ? `${pathD} L ${points[points.length - 1].x} ${PADDING.top + innerH} L ${points[0].x} ${PADDING.top + innerH} Z`
+  // Gradient area fill - strictly restricted to completed months
+  const completedAreaD =
+    completedPoints.length > 1
+      ? `${completedPathD} L ${completedPoints[completedPoints.length - 1].x} ${PADDING.top + innerH} L ${completedPoints[0].x} ${PADDING.top + innerH} Z`
       : '';
+
+  // Dashed segment connecting last completed month to MTD
+  let mtdDashedPathD = '';
+  if (mtdPoint && completedPoints.length > 0) {
+    const lastCompleted = completedPoints[completedPoints.length - 1];
+    mtdDashedPathD = `M ${lastCompleted.x} ${lastCompleted.y} L ${mtdPoint.x} ${mtdPoint.y}`;
+  }
 
   return (
     <svg
@@ -1183,58 +1291,133 @@ function MonthlyTrendLineChart({ months, totals, unit, currentYM, setTooltip }) 
         );
       })}
 
-      {/* Shaded Area */}
-      {areaD && <path d={areaD} fill="url(#areaGradient)" />}
+      {/* Shaded Area (completed months only) */}
+      {completedAreaD && <path d={completedAreaD} fill="url(#areaGradient)" />}
 
-      {/* Line */}
-      {pathD && <path d={pathD} fill="none" stroke="#0d9488" strokeWidth={3} strokeLinecap="round" />}
+      {/* Solid Line (completed months) */}
+      {completedPathD && (
+        <path d={completedPathD} fill="none" stroke="#0d9488" strokeWidth={3} strokeLinecap="round" />
+      )}
 
-      {/* Points & Month Labels */}
+      {/* Dashed Line (latest completed month to MTD month) */}
+      {mtdDashedPathD && (
+        <path
+          d={mtdDashedPathD}
+          fill="none"
+          stroke="#0d9488"
+          strokeWidth={3}
+          strokeDasharray="6,4"
+          strokeLinecap="round"
+        />
+      )}
+
+      {/* Completed Months Circular Markers */}
+      {completedPoints.map((pt) => (
+        <circle
+          key={pt.month.key}
+          cx={pt.x}
+          cy={pt.y}
+          r={5}
+          fill="#ffffff"
+          stroke="#0d9488"
+          strokeWidth={2.5}
+          style={{ cursor: 'pointer', transition: 'r 0.15s ease' }}
+          onMouseEnter={(e) =>
+            setTooltip({
+              content: isCumulative
+                ? `${pt.month.label} ${pt.month.year} (Cumulative): ${formatQty(pt.val, unit)} ${unit}`
+                : `${pt.month.label} ${pt.month.year}: ${formatQty(pt.val, unit)} ${unit}`,
+              x: e.clientX,
+              y: e.clientY,
+            })
+          }
+          onMouseMove={(e) =>
+            setTooltip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : null))
+          }
+        />
+      ))}
+
+      {/* Distinct MTD Data Point Marker */}
+      {mtdPoint && (
+        <g>
+          {/* Outer dashed halo ring */}
+          <circle
+            cx={mtdPoint.x}
+            cy={mtdPoint.y}
+            r={8}
+            fill="none"
+            stroke="#0d9488"
+            strokeWidth={1.5}
+            strokeDasharray="3,2"
+          />
+          {/* Inner core dot */}
+          <circle
+            cx={mtdPoint.x}
+            cy={mtdPoint.y}
+            r={4.5}
+            fill="#0d9488"
+            stroke="#ffffff"
+            strokeWidth={2}
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={(e) =>
+              setTooltip({
+                content: isCumulative
+                  ? `${mtdPoint.month.label} ${mtdPoint.month.year} (MTD - Cumulative): ${formatQty(mtdPoint.val, unit)} ${unit} recorded so far`
+                  : `${mtdPoint.month.label} ${mtdPoint.month.year} (MTD - Partial Month): ${formatQty(mtdPoint.val, unit)} ${unit} recorded so far`,
+                x: e.clientX,
+                y: e.clientY,
+              })
+            }
+            onMouseMove={(e) =>
+              setTooltip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : null))
+            }
+          />
+        </g>
+      )}
+
+      {/* X-axis Month Labels & MTD Indicator */}
       {months.map((m, idx) => {
         const x = PADDING.left + idx * stepX;
         const isFuture = m.key > currentYM;
-        const pt = points.find((p) => p.month.key === m.key);
+        const isMTD = m.key === currentYM;
 
         return (
           <g key={m.key}>
-            {/* X-axis label */}
             <text
               x={x}
-              y={HEIGHT - 12}
+              y={HEIGHT - 24}
               textAnchor="middle"
               fontSize={11}
               fontWeight={600}
-              fill={isFuture ? '#94a3b8' : '#334155'}
+              fill={isFuture ? '#94a3b8' : isMTD ? '#0f766e' : '#334155'}
             >
               {m.label}
             </text>
 
-            {/* Point on line */}
-            {pt && (
-              <circle
-                cx={pt.x}
-                cy={pt.y}
-                r={5}
-                fill="#ffffff"
-                stroke="#0d9488"
-                strokeWidth={2.5}
-                style={{ cursor: 'pointer', transition: 'r 0.15s ease' }}
-                onMouseEnter={(e) =>
-                  setTooltip({
-                    content: `${m.label} ${m.year}: ${formatQty(pt.val, unit)} ${unit}`,
-                    x: e.clientX,
-                    y: e.clientY,
-                  })
-                }
-                onMouseMove={(e) =>
-                  setTooltip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : null))
-                }
-              />
-            )}
-
-            {/* Future placeholder */}
-            {isFuture && (
-              <circle cx={x} cy={PADDING.top + innerH} r={3} fill="#cbd5e1" stroke="none" />
+            {isMTD && (
+              <g transform={`translate(${x - 14}, ${HEIGHT - 18})`}>
+                <rect
+                  x={0}
+                  y={0}
+                  width={28}
+                  height={12}
+                  rx={3}
+                  fill="#ccfbf1"
+                  stroke="#99f6e4"
+                  strokeWidth={0.75}
+                />
+                <text
+                  x={14}
+                  y={9}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fontWeight={700}
+                  fill="#0f766e"
+                  letterSpacing="0.05em"
+                >
+                  MTD
+                </text>
+              </g>
             )}
           </g>
         );
@@ -1253,9 +1436,11 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
   const innerW = WIDTH - PADDING.left - PADDING.right;
   const innerH = HEIGHT - PADDING.top - PADDING.bottom;
 
+  const completedMonths = months.filter((m) => m.key < currentYM);
+  const mtdMonth = months.find((m) => m.key === currentYM);
   const activeMonths = months.filter((m) => m.key <= currentYM);
 
-  // Determine overall max value for selected stations
+  // Determine overall max value for selected stations across active months
   let rawMax = 0;
   stations.forEach((s) => {
     activeMonths.forEach((m) => {
@@ -1308,7 +1493,9 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
         const colorIdx = selectedStationCodes.indexOf(s.code);
         const color = PALETTE[colorIdx % PALETTE.length];
 
-        const pts = activeMonths.map((m, idx) => {
+        // Completed points
+        const completedPts = completedMonths.map((m) => {
+          const idx = months.findIndex((item) => item.key === m.key);
           const val = stationData[s.id]?.[m.key] || 0;
           return {
             x: PADDING.left + idx * stepX,
@@ -1318,14 +1505,47 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
           };
         });
 
-        const d = pts.reduce((acc, pt, idx) => {
+        const completedPathD = completedPts.reduce((acc, pt, idx) => {
           return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
         }, '');
 
+        // MTD point and connecting dashed line
+        const mtdPt = mtdMonth
+          ? {
+              x: PADDING.left + months.findIndex((item) => item.key === mtdMonth.key) * stepX,
+              y: getY(stationData[s.id]?.[mtdMonth.key] || 0),
+              val: stationData[s.id]?.[mtdMonth.key] || 0,
+              month: mtdMonth,
+            }
+          : null;
+
+        let mtdDashedPathD = '';
+        if (mtdPt && completedPts.length > 0) {
+          const lastPt = completedPts[completedPts.length - 1];
+          mtdDashedPathD = `M ${lastPt.x} ${lastPt.y} L ${mtdPt.x} ${mtdPt.y}`;
+        }
+
         return (
           <g key={s.id}>
-            <path d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" />
-            {pts.map((pt) => (
+            {/* Solid line for completed months */}
+            {completedPathD && (
+              <path d={completedPathD} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" />
+            )}
+
+            {/* Dashed line to MTD month */}
+            {mtdDashedPathD && (
+              <path
+                d={mtdDashedPathD}
+                fill="none"
+                stroke={color}
+                strokeWidth={2.5}
+                strokeDasharray="6,4"
+                strokeLinecap="round"
+              />
+            )}
+
+            {/* Completed months circular markers */}
+            {completedPts.map((pt) => (
               <circle
                 key={pt.month.key}
                 cx={pt.x}
@@ -1337,7 +1557,7 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
                 style={{ cursor: 'pointer' }}
                 onMouseEnter={(e) =>
                   setTooltip({
-                    content: `${s.name} (${s.code}) - ${pt.month.label}: ${formatQty(pt.val, unit)} ${unit}`,
+                    content: `${s.name} (${s.code}) - ${pt.month.label} ${pt.month.year}: ${formatQty(pt.val, unit)} ${unit}`,
                     x: e.clientX,
                     y: e.clientY,
                   })
@@ -1347,26 +1567,89 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
                 }
               />
             ))}
+
+            {/* Distinct MTD marker */}
+            {mtdPt && (
+              <g>
+                <circle
+                  cx={mtdPt.x}
+                  cy={mtdPt.y}
+                  r={7}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={1.5}
+                  strokeDasharray="3,2"
+                />
+                <circle
+                  cx={mtdPt.x}
+                  cy={mtdPt.y}
+                  r={4}
+                  fill={color}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={(e) =>
+                    setTooltip({
+                      content: `${s.name} (${s.code}) - ${mtdPt.month.label} (MTD - Partial Month): ${formatQty(mtdPt.val, unit)} ${unit} recorded so far`,
+                      x: e.clientX,
+                      y: e.clientY,
+                    })
+                  }
+                  onMouseMove={(e) =>
+                    setTooltip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : null))
+                  }
+                />
+              </g>
+            )}
           </g>
         );
       })}
 
-      {/* Month Labels on X-axis */}
+      {/* Month Labels & MTD Indicator on X-axis */}
       {months.map((m, idx) => {
         const x = PADDING.left + idx * stepX;
         const isFuture = m.key > currentYM;
+        const isMTD = m.key === currentYM;
+
         return (
-          <text
-            key={m.key}
-            x={x}
-            y={HEIGHT - 12}
-            textAnchor="middle"
-            fontSize={11}
-            fontWeight={600}
-            fill={isFuture ? '#94a3b8' : '#334155'}
-          >
-            {m.label}
-          </text>
+          <g key={m.key}>
+            <text
+              x={x}
+              y={HEIGHT - 24}
+              textAnchor="middle"
+              fontSize={11}
+              fontWeight={600}
+              fill={isFuture ? '#94a3b8' : isMTD ? '#0f766e' : '#334155'}
+            >
+              {m.label}
+            </text>
+
+            {isMTD && (
+              <g transform={`translate(${x - 14}, ${HEIGHT - 18})`}>
+                <rect
+                  x={0}
+                  y={0}
+                  width={28}
+                  height={12}
+                  rx={3}
+                  fill="#ccfbf1"
+                  stroke="#99f6e4"
+                  strokeWidth={0.75}
+                />
+                <text
+                  x={14}
+                  y={9}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fontWeight={700}
+                  fill="#0f766e"
+                  letterSpacing="0.05em"
+                >
+                  MTD
+                </text>
+              </g>
+            )}
+          </g>
         );
       })}
     </svg>
