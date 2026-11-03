@@ -1036,6 +1036,74 @@ export default function ItemConsumptionAnalysis() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Calculate nice, clean tick values and maximum for Y-axis.
+ * Guarantees that:
+ * 1. Tick values are exact and distinct (no duplicate labels).
+ * 2. If isIntegerOnly is true (e.g. Nos items), all ticks are integers.
+ * 3. Gridlines and data points use the exact same getY transformation.
+ */
+function getNiceYScale(rawMax, maxTicks = 5, isIntegerOnly = false) {
+  if (!rawMax || rawMax <= 0) {
+    const niceMax = isIntegerOnly ? 4 : 1;
+    const ticks = isIntegerOnly ? [0, 1, 2, 3, 4] : [0, 0.25, 0.5, 0.75, 1.0];
+    return { niceMax, ticks };
+  }
+
+  // If Nos item and rawMax is small (<= 5), use simple unit steps 0, 1, 2, ...
+  if (isIntegerOnly && rawMax <= 5) {
+    const niceMax = Math.max(Math.ceil(rawMax), 2);
+    const ticks = [];
+    for (let i = 0; i <= niceMax; i++) {
+      ticks.push(i);
+    }
+    return { niceMax, ticks };
+  }
+
+  // Calculate rough step
+  const roughStep = rawMax / (maxTicks - 1);
+  const exponent = Math.floor(Math.log10(roughStep));
+  const fraction = roughStep / Math.pow(10, exponent);
+
+  let niceFraction;
+  if (fraction <= 1.2) niceFraction = 1;
+  else if (fraction <= 2.5) niceFraction = 2;
+  else if (fraction <= 5) niceFraction = 5;
+  else niceFraction = 10;
+
+  let step = niceFraction * Math.pow(10, exponent);
+  if (isIntegerOnly && step < 1) {
+    step = 1;
+  }
+
+  const ticks = [];
+  let current = 0;
+  // Guard against infinite loops with max 10 ticks
+  while (current < rawMax || ticks.length < 2) {
+    ticks.push(Number(current.toFixed(6)));
+    current += step;
+    if (ticks.length > 10) break;
+  }
+  ticks.push(Number(current.toFixed(6)));
+  const niceMax = ticks[ticks.length - 1];
+
+  return { niceMax, ticks };
+}
+
+/**
+ * Format a tick value for the axis label without rounding discrepancies
+ */
+function formatTickLabel(val) {
+  if (val >= 1000) {
+    const k = val / 1000;
+    return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1)}k`;
+  }
+  if (Number.isInteger(val)) {
+    return val.toString();
+  }
+  return Number(val.toFixed(2)).toString();
+}
+
+/**
  * Chart A: Overall Monthly Consumption Line / Area Chart
  */
 function MonthlyTrendLineChart({ months, totals, unit, currentYM, setTooltip }) {
@@ -1050,16 +1118,19 @@ function MonthlyTrendLineChart({ months, totals, unit, currentYM, setTooltip }) 
   // Filter elapsed or current months
   const activeMonths = months.filter((m) => m.key <= currentYM);
   const values = activeMonths.map((m) => totals[m.key] || 0);
-  const maxVal = Math.max(...values, 5);
+  const rawMax = Math.max(...values, 0);
+  const isIntegerOnly = unit === 'Nos';
+  const { niceMax, ticks } = getNiceYScale(rawMax, 5, isIntegerOnly);
 
   const stepX = innerW / (months.length - 1);
-  const getY = (val) => PADDING.top + innerH - (val / maxVal) * innerH;
+  const getY = (val) => PADDING.top + innerH - (val / niceMax) * innerH;
 
   // Build SVG path points
   const points = activeMonths.map((m, idx) => {
+    const val = totals[m.key] || 0;
     const x = PADDING.left + idx * stepX;
-    const y = getY(totals[m.key] || 0);
-    return { x, y, month: m, val: totals[m.key] || 0 };
+    const y = getY(val);
+    return { x, y, month: m, val };
   });
 
   const pathD = points.reduce((acc, pt, idx) => {
@@ -1086,18 +1157,17 @@ function MonthlyTrendLineChart({ months, totals, unit, currentYM, setTooltip }) 
       </defs>
 
       {/* Y-axis gridlines & labels */}
-      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-        const val = maxVal * ratio;
-        const y = PADDING.top + innerH - ratio * innerH;
+      {ticks.map((tickVal) => {
+        const y = getY(tickVal);
         return (
-          <g key={ratio}>
+          <g key={tickVal}>
             <line
               x1={PADDING.left}
               y1={y}
               x2={WIDTH - PADDING.right}
               y2={y}
               stroke="#e2e8f0"
-              strokeDasharray={ratio === 0 ? 'none' : '3,3'}
+              strokeDasharray={tickVal === 0 ? 'none' : '3,3'}
             />
             <text
               x={PADDING.left - 10}
@@ -1107,7 +1177,7 @@ function MonthlyTrendLineChart({ months, totals, unit, currentYM, setTooltip }) 
               fill="#64748b"
               fontWeight={500}
             >
-              {val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val.toFixed(unit === 'Nos' ? 0 : 1)}
+              {formatTickLabel(tickVal)}
             </text>
           </g>
         );
@@ -1186,16 +1256,19 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
   const activeMonths = months.filter((m) => m.key <= currentYM);
 
   // Determine overall max value for selected stations
-  let maxVal = 1;
+  let rawMax = 0;
   stations.forEach((s) => {
     activeMonths.forEach((m) => {
       const v = stationData[s.id]?.[m.key] || 0;
-      if (v > maxVal) maxVal = v;
+      if (v > rawMax) rawMax = v;
     });
   });
 
+  const isIntegerOnly = unit === 'Nos';
+  const { niceMax, ticks } = getNiceYScale(rawMax, 5, isIntegerOnly);
+
   const stepX = innerW / (months.length - 1);
-  const getY = (val) => PADDING.top + innerH - (val / maxVal) * innerH;
+  const getY = (val) => PADDING.top + innerH - (val / niceMax) * innerH;
 
   return (
     <svg
@@ -1203,19 +1276,18 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
       style={{ width: '100%', height: 'auto', display: 'block' }}
       onMouseLeave={() => setTooltip(null)}
     >
-      {/* Y-axis gridlines */}
-      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-        const val = maxVal * ratio;
-        const y = PADDING.top + innerH - ratio * innerH;
+      {/* Y-axis gridlines & labels */}
+      {ticks.map((tickVal) => {
+        const y = getY(tickVal);
         return (
-          <g key={ratio}>
+          <g key={tickVal}>
             <line
               x1={PADDING.left}
               y1={y}
               x2={WIDTH - PADDING.right}
               y2={y}
               stroke="#e2e8f0"
-              strokeDasharray={ratio === 0 ? 'none' : '3,3'}
+              strokeDasharray={tickVal === 0 ? 'none' : '3,3'}
             />
             <text
               x={PADDING.left - 10}
@@ -1225,7 +1297,7 @@ function MultiStationLineChart({ months, stations, selectedStationCodes, station
               fill="#64748b"
               fontWeight={500}
             >
-              {val.toFixed(unit === 'Nos' ? 0 : 1)}
+              {formatTickLabel(tickVal)}
             </text>
           </g>
         );
