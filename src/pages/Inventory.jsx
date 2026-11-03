@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toDisplayValue, getDisplayUnit, toDBUnit } from '../utils/units';
 import { Package, Search, AlertTriangle, ClipboardList, Pencil } from 'lucide-react';
 import Layout from '../components/layout/Layout';
@@ -251,7 +252,27 @@ export default function Inventory() {
   const lowStockCount = (role === ROLES.ALS || role === ROLES.HKTL) ? 0 : displayData.filter((r) => r.is_low).length;
 
   const columns = [
-    { key: 'item_name', label: 'Item Name', sortable: true },
+    {
+      key: 'item_name',
+      label: 'Item Name',
+      sortable: true,
+      render: (v, row) => (
+        <Link
+          to={`/inventory/analysis/${row.item_id}`}
+          style={{
+            color: 'var(--color-primary-700, #0f766e)',
+            fontWeight: 600,
+            textDecoration: 'none',
+            display: 'inline-block',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+          title="Click to view Item Consumption Analysis across all 25 stations"
+        >
+          {v}
+        </Link>
+      ),
+    },
     { key: 'tender_year', label: 'Tender Year' },
     { key: 'brand_name', label: 'Brand Name' },
     { key: 'unit_rate', label: 'Rate (incl. GST)' },

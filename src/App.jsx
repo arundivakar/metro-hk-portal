@@ -25,6 +25,7 @@ import PrintChecklist from './pages/PrintChecklist';
 import DataInitialization from './pages/DataInitialization';
 import BusinessContinuity from './pages/BusinessContinuity';
 import ISTAudit from './pages/ISTAudit';
+import ItemConsumptionAnalysis from './pages/ItemConsumptionAnalysis';
 
 // Styles
 import './styles/index.css';
@@ -84,6 +85,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Inventory />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/inventory/analysis/:itemId"
+          element={
+            <ProtectedRoute>
+              <ItemConsumptionAnalysis />
             </ProtectedRoute>
           }
         />
